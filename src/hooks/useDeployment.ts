@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export type DeploymentStatus = "idle" | "building" | "deployed" | "failed";
 
@@ -13,65 +14,130 @@ interface Deployment {
 interface UseDeploymentReturn {
   deployment: Deployment | null;
   status: DeploymentStatus;
-  triggerDeployment: () => Promise<void>;
-  pollStatus: () => Promise<void>;
+  triggerDeployment: (ref?: string) => Promise<void>;
+  pollStatus: (deploymentId: string) => Promise<void>;
 }
 
-export const useDeployment = (projectId: string): UseDeploymentReturn => {
+export const useDeployment = (vercelProjectId: string | null): UseDeploymentReturn => {
   const [deployment, setDeployment] = useState<Deployment | null>(null);
   const [status, setStatus] = useState<DeploymentStatus>("idle");
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
-  const triggerDeployment = useCallback(async () => {
-    // Mock: In production, this calls the edge function
+  const pollStatus = useCallback(async (deploymentId: string) => {
+    if (!deploymentId) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('vercel-status', {
+        body: { deploymentId }
+      });
+
+      if (error) {
+        console.error('Error polling deployment status:', error);
+        return;
+      }
+
+      console.log('Deployment status:', data);
+
+      if (data.status === 'ready') {
+        setStatus("deployed");
+        setDeployment(prev => prev ? {
+          ...prev,
+          status: "deployed",
+          url: data.url
+        } : null);
+        
+        // Stop polling
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
+      } else if (data.status === 'error') {
+        setStatus("failed");
+        setDeployment(prev => prev ? {
+          ...prev,
+          status: "failed",
+          error: data.error || 'Deployment failed'
+        } : null);
+        
+        // Stop polling
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
+      }
+      // If still building, continue polling
+    } catch (e) {
+      console.error('Error in pollStatus:', e);
+    }
+  }, []);
+
+  const triggerDeployment = useCallback(async (ref: string = 'main') => {
+    if (!vercelProjectId) {
+      console.error('No Vercel project ID configured');
+      return;
+    }
+
     setStatus("building");
     setDeployment({
-      id: `deploy-${Date.now()}`,
+      id: '',
       status: "building",
       url: null,
       error: null,
       createdAt: new Date(),
     });
 
-    // Simulate build time
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    try {
+      const { data, error } = await supabase.functions.invoke('vercel-deploy', {
+        body: { projectId: vercelProjectId, ref }
+      });
 
-    // Mock success (90%) or failure (10%)
-    const success = Math.random() > 0.1;
+      if (error) {
+        console.error('Error triggering deployment:', error);
+        setStatus("failed");
+        setDeployment(prev => prev ? {
+          ...prev,
+          status: "failed",
+          error: error.message || 'Failed to trigger deployment'
+        } : null);
+        return;
+      }
 
-    if (success) {
-      setStatus("deployed");
-      setDeployment((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: "deployed",
-              url: "https://preview-abc123.vercel.app",
-            }
-          : null
-      );
-    } else {
+      console.log('Deployment triggered:', data);
+
+      if (!data.success) {
+        setStatus("failed");
+        setDeployment(prev => prev ? {
+          ...prev,
+          status: "failed",
+          error: data.error || 'Deployment failed to start'
+        } : null);
+        return;
+      }
+
+      setDeployment(prev => prev ? {
+        ...prev,
+        id: data.deploymentId,
+        url: data.url
+      } : null);
+
+      // Start polling for status
+      pollingRef.current = setInterval(() => {
+        pollStatus(data.deploymentId);
+      }, 5000);
+
+      // Initial poll
+      setTimeout(() => pollStatus(data.deploymentId), 2000);
+
+    } catch (e: any) {
+      console.error('Error in triggerDeployment:', e);
       setStatus("failed");
-      setDeployment((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: "failed",
-              error: "Build failed: TypeScript error in Testimonials.tsx",
-            }
-          : null
-      );
+      setDeployment(prev => prev ? {
+        ...prev,
+        status: "failed",
+        error: e.message || 'Unknown error'
+      } : null);
     }
-  }, []);
-
-  const pollStatus = useCallback(async () => {
-    // Mock: In production, this polls the Vercel API via edge function
-    if (!deployment) return;
-
-    // Simulate polling
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Return current status
-  }, [deployment]);
+  }, [vercelProjectId, pollStatus]);
 
   return {
     deployment,

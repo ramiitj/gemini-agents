@@ -69,11 +69,57 @@ export const useProjects = () => {
 
       if (error) throw error;
 
+      // If GitHub repo provided, automatically create Vercel project
+      if (githubRepo) {
+        try {
+          toast({
+            title: "Setting up deployment",
+            description: "Creating Vercel project...",
+          });
+
+          const { data: vercelData, error: vercelError } = await supabase.functions.invoke('vercel-create-project', {
+            body: { name, githubRepo, framework: 'vite' }
+          });
+
+          console.log('Vercel project creation response:', vercelData);
+
+          if (vercelError) {
+            console.error('Vercel project creation error:', vercelError);
+            toast({
+              title: "Warning",
+              description: "Project created but Vercel setup failed. You can configure it later.",
+              variant: "destructive",
+            });
+          } else if (vercelData?.projectId) {
+            // Update project with Vercel project ID
+            await supabase
+              .from("projects")
+              .update({ vercel_project_id: vercelData.projectId })
+              .eq("id", data.id);
+
+            data.vercel_project_id = vercelData.projectId;
+
+            toast({
+              title: "Success",
+              description: "Project created with automatic deployment configured!",
+            });
+          }
+        } catch (e) {
+          console.error('Failed to create Vercel project:', e);
+          toast({
+            title: "Warning", 
+            description: "Project created but Vercel setup failed. You can configure it later.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({
+          title: "Success",
+          description: "Project created successfully",
+        });
+      }
+
       setProjects((prev) => [data, ...prev]);
-      toast({
-        title: "Success",
-        description: "Project created successfully",
-      });
       return data;
     } catch (error: any) {
       console.error("Error creating project:", error);

@@ -1,1 +1,28 @@
 project_id = "qzxysykgkyyhuxbejhmz"
+
+[functions.ai-agent]
+verify_jwt = false
+
+[functions.generate-diff]
+verify_jwt = false
+
+[functions.github-clone-repo]
+verify_jwt = false
+
+[functions.github-commit-push]
+verify_jwt = false
+
+[functions.github-create-pr]
+verify_jwt = false
+
+[functions.github-read-file]
+verify_jwt = false
+
+[functions.vercel-deploy]
+verify_jwt = false
+
+[functions.vercel-status]
+verify_jwt = false
+
+[functions.vercel-create-project]
+verify_jwt = false

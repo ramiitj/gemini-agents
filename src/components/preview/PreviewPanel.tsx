@@ -1,19 +1,24 @@
 import { useState } from "react";
-import { ExternalLink, RotateCcw, Check, AlertCircle } from "lucide-react";
+import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DiffViewer from "./DiffViewer";
 import DeploymentStatus from "./DeploymentStatus";
 import PreviewFrame from "./PreviewFrame";
 import FileList from "./FileList";
+import { useDeployment } from "@/hooks/useDeployment";
 
 type Tab = "preview" | "changes" | "files";
 
-const PreviewPanel = () => {
+interface PreviewPanelProps {
+  projectId: string;
+  vercelProjectId: string | null;
+  githubRepo: string | null;
+}
+
+const PreviewPanel = ({ projectId, vercelProjectId, githubRepo }: PreviewPanelProps) => {
   const [activeTab, setActiveTab] = useState<Tab>("preview");
   const [showBefore, setShowBefore] = useState(false);
-  const [deploymentStatus, setDeploymentStatus] = useState<
-    "idle" | "building" | "deployed" | "failed"
-  >("deployed");
+  const { deployment, status, triggerDeployment } = useDeployment(vercelProjectId);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "preview", label: "Preview" },
@@ -21,7 +26,55 @@ const PreviewPanel = () => {
     { id: "files", label: "Files" },
   ];
 
-  const previewUrl = "https://marketing-site-abc123.vercel.app";
+  const previewUrl = deployment?.url 
+    ? (deployment.url.startsWith('http') ? deployment.url : `https://${deployment.url}`)
+    : null;
+
+  // Show setup state if no Vercel project is configured
+  if (!vercelProjectId) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="flex items-center justify-between border-b border-border px-4">
+          <div className="flex">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-3 text-sm transition-colors ${
+                  activeTab === tab.id
+                    ? "border-b-2 border-foreground font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <DeploymentStatus status="idle" />
+        </div>
+        
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-muted/20 p-8">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <Settings className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <div className="max-w-sm text-center">
+            <p className="text-sm font-medium text-foreground">Deployment not configured</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {githubRepo 
+                ? "Vercel project is being set up. This may take a moment..."
+                : "Connect a GitHub repository to enable automatic deployments and live previews."}
+            </p>
+          </div>
+          {githubRepo && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+              <GitBranch className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">{githubRepo}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -42,7 +95,7 @@ const PreviewPanel = () => {
             </button>
           ))}
         </div>
-        <DeploymentStatus status={deploymentStatus} />
+        <DeploymentStatus status={status} />
       </div>
 
       {/* Content */}
@@ -53,7 +106,7 @@ const PreviewPanel = () => {
             <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-2">
               <div className="flex items-center gap-3">
                 <span className="text-xs text-muted-foreground">
-                  {previewUrl.replace("https://", "")}
+                  {previewUrl ? previewUrl.replace("https://", "") : "No deployment yet"}
                 </span>
                 {/* Before/After toggle */}
                 <div className="flex rounded-md border border-border bg-background">
@@ -79,31 +132,47 @@ const PreviewPanel = () => {
                   </button>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1.5 text-xs"
-                asChild
-              >
-                <a href={previewUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-3 w-3" />
-                  Open
-                </a>
-              </Button>
+              <div className="flex items-center gap-2">
+                {status === "idle" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={() => triggerDeployment()}
+                  >
+                    Deploy
+                  </Button>
+                )}
+                {previewUrl && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    asChild
+                  >
+                    <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3 w-3" />
+                      Open
+                    </a>
+                  </Button>
+                )}
+              </div>
             </div>
 
-            {/* Preview iframe or error */}
-            {deploymentStatus === "failed" ? (
+            {/* Preview iframe or states */}
+            {status === "failed" ? (
               <ErrorDisplay
-                onRetry={() => {
-                  setDeploymentStatus("building");
-                  setTimeout(() => setDeploymentStatus("deployed"), 2000);
-                }}
+                error={deployment?.error}
+                onRetry={() => triggerDeployment()}
               />
-            ) : deploymentStatus === "building" ? (
+            ) : status === "building" ? (
               <BuildingState />
-            ) : (
+            ) : status === "idle" && !previewUrl ? (
+              <IdleState onDeploy={() => triggerDeployment()} />
+            ) : previewUrl ? (
               <PreviewFrame url={previewUrl} showBefore={showBefore} />
+            ) : (
+              <IdleState onDeploy={() => triggerDeployment()} />
             )}
           </div>
         )}
@@ -148,7 +217,24 @@ const BuildingState = () => (
   </div>
 );
 
-const ErrorDisplay = ({ onRetry }: { onRetry: () => void }) => (
+const IdleState = ({ onDeploy }: { onDeploy: () => void }) => (
+  <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-muted/20 p-8">
+    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+      <GitBranch className="h-6 w-6 text-muted-foreground" />
+    </div>
+    <div className="max-w-sm text-center">
+      <p className="text-sm font-medium text-foreground">Ready to deploy</p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Click the button below to trigger a new deployment from your repository.
+      </p>
+    </div>
+    <Button size="sm" onClick={onDeploy}>
+      Deploy now
+    </Button>
+  </div>
+);
+
+const ErrorDisplay = ({ error, onRetry }: { error?: string | null; onRetry: () => void }) => (
   <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-muted/20 p-8">
     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
       <AlertCircle className="h-6 w-6 text-destructive" />
@@ -156,22 +242,13 @@ const ErrorDisplay = ({ onRetry }: { onRetry: () => void }) => (
     <div className="max-w-sm text-center">
       <p className="text-sm font-medium text-foreground">Build failed</p>
       <p className="mt-2 text-xs text-muted-foreground">
-        TypeScript error in src/components/Testimonials.tsx: Property 'quote'
-        does not exist on type 'Testimonial'.
-      </p>
-    </div>
-    <div className="rounded-lg border border-border bg-card p-3">
-      <p className="text-xs font-medium text-foreground">AI suggestion</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Add the missing 'quote' property to the Testimonial interface, or rename
-        'testimonial' to 'quote' in the component.
+        {error || "An error occurred during the build process."}
       </p>
     </div>
     <div className="flex gap-2">
       <Button variant="outline" size="sm" onClick={onRetry}>
         Retry build
       </Button>
-      <Button size="sm">Apply AI fix</Button>
     </div>
   </div>
 );
