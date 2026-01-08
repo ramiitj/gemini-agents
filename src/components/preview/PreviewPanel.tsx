@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings, MousePointer } from "lucide-react";
+import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings, MousePointer, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DiffViewer from "./DiffViewer";
 import DeploymentStatus from "./DeploymentStatus";
@@ -7,6 +7,8 @@ import PreviewFrame from "./PreviewFrame";
 import FileList from "./FileList";
 import ElementInfoPanel from "./ElementInfoPanel";
 import { useDeployment } from "@/hooks/useDeployment";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
 
 type Tab = "preview" | "changes" | "files";
@@ -23,6 +25,7 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI }: Pr
   const [showBefore, setShowBefore] = useState(false);
   const [visualEditMode, setVisualEditMode] = useState(false);
   const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
+  const [isSettingUpVercel, setIsSettingUpVercel] = useState(false);
   const { deployment, status, triggerDeployment } = useDeployment(vercelProjectId);
 
   const tabs: { id: Tab; label: string }[] = [
@@ -59,6 +62,46 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI }: Pr
     }
   };
 
+  const handleSetupVercel = async () => {
+    if (!githubRepo || !projectId) return;
+    
+    setIsSettingUpVercel(true);
+    try {
+      // Extract project name from GitHub repo
+      const repoMatch = githubRepo.match(/github\.com[\/:]([^\/]+)\/([^\/\.]+)/);
+      const projectName = repoMatch ? repoMatch[2] : 'project';
+      
+      // Create Vercel project
+      const { data, error } = await supabase.functions.invoke('vercel-create-project', {
+        body: { 
+          name: projectName,
+          githubRepo,
+          framework: 'vite'
+        }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.projectId) {
+        // Update the project with Vercel ID
+        await supabase.functions.invoke('update-project-vercel', {
+          body: { projectId, vercelProjectId: data.projectId }
+        });
+        
+        toast.success('Vercel project created! Refresh to deploy.');
+        // Reload to get new vercelProjectId
+        window.location.reload();
+      } else if (data?.error) {
+        throw new Error(data.error);
+      }
+    } catch (e: any) {
+      console.error('Error setting up Vercel:', e);
+      toast.error(`Failed to setup Vercel: ${e.message}`);
+    } finally {
+      setIsSettingUpVercel(false);
+    }
+  };
+
   // Show setup state if no Vercel project is configured
   if (!vercelProjectId) {
     return (
@@ -90,15 +133,31 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI }: Pr
             <p className="text-sm font-medium text-foreground">Deployment not configured</p>
             <p className="mt-2 text-xs text-muted-foreground">
               {githubRepo 
-                ? "Vercel project is being set up. This may take a moment..."
+                ? "Click below to set up automatic deployments with Vercel."
                 : "Connect a GitHub repository to enable automatic deployments and live previews."}
             </p>
           </div>
           {githubRepo && (
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-              <GitBranch className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">{githubRepo}</span>
-            </div>
+            <>
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+                <GitBranch className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">{githubRepo}</span>
+              </div>
+              <Button 
+                onClick={handleSetupVercel} 
+                disabled={isSettingUpVercel}
+                size="sm"
+              >
+                {isSettingUpVercel ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Setting up...
+                  </>
+                ) : (
+                  'Setup Vercel Deployment'
+                )}
+              </Button>
+            </>
           )}
         </div>
       </div>

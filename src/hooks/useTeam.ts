@@ -26,31 +26,33 @@ export const useTeam = (organizationId: string | null) => {
       return;
     }
 
-    const { data, error } = await supabase
+    // Fetch user_roles first
+    const { data: roles, error: rolesError } = await supabase
       .from("user_roles")
-      .select(`
-        id,
-        user_id,
-        role,
-        profiles:user_id (
-          email,
-          full_name,
-          avatar_url
-        )
-      `)
+      .select("id, user_id, role")
       .eq("organization_id", organizationId);
 
-    if (error) {
-      console.error("Error fetching team:", error);
+    if (rolesError) {
+      console.error("Error fetching roles:", rolesError);
       setLoading(false);
       return;
     }
 
-    const formattedMembers: TeamMember[] = (data || []).map((member: any) => ({
+    // Then fetch profiles separately to avoid FK issues
+    const userIds = roles?.map(r => r.user_id) || [];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, avatar_url")
+      .in("id", userIds);
+
+    // Combine the data
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+    const formattedMembers: TeamMember[] = (roles || []).map((member) => ({
       id: member.id,
       user_id: member.user_id,
-      role: member.role,
-      profile: member.profiles,
+      role: member.role as "owner" | "admin" | "editor" | "viewer",
+      profile: profileMap.get(member.user_id) || null,
     }));
 
     setMembers(formattedMembers);
@@ -67,10 +69,35 @@ export const useTeam = (organizationId: string | null) => {
   }, [organizationId, user]);
 
   const inviteMember = async (email: string, role: "admin" | "editor" | "viewer") => {
-    // In a real app, this would send an invitation email
-    // For now, we'll just show a message
-    console.log(`Invitation would be sent to ${email} with role ${role}`);
-    return { success: true, message: `Invitation sent to ${email}` };
+    if (!organizationId || !user) {
+      return { success: false, message: 'Not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from("invitations")
+      .insert({
+        email,
+        role,
+        organization_id: organizationId,
+        invited_by: user.id
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating invitation:", error);
+      return { success: false, message: error.message };
+    }
+
+    // Generate invitation link
+    const inviteLink = `${window.location.origin}/accept-invite/${data.token}`;
+    
+    return { 
+      success: true, 
+      message: `Invitation created for ${email}. Share this link: ${inviteLink}`, 
+      inviteLink,
+      data 
+    };
   };
 
   const updateMemberRole = async (memberId: string, newRole: "admin" | "editor" | "viewer") => {
