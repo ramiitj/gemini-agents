@@ -1,3 +1,5 @@
+import { Check, Loader2, AlertCircle, Clock } from "lucide-react";
+
 interface DeploymentStatusProps {
   status: "building" | "deployed" | "failed" | "idle";
 }
@@ -6,35 +8,35 @@ const DeploymentStatus = ({ status }: DeploymentStatusProps) => {
   const config = {
     building: {
       label: "Building...",
-      dotColor: "bg-yellow-500",
-      animate: true,
+      icon: Loader2,
+      className: "text-yellow-600",
+      iconClassName: "animate-spin",
     },
     deployed: {
       label: "Deployed",
-      dotColor: "bg-green-500",
-      animate: false,
+      icon: Check,
+      className: "text-green-600",
+      iconClassName: "",
     },
     failed: {
       label: "Failed",
-      dotColor: "bg-red-500",
-      animate: false,
+      icon: AlertCircle,
+      className: "text-destructive",
+      iconClassName: "",
     },
     idle: {
       label: "Ready",
-      dotColor: "bg-muted-foreground",
-      animate: false,
+      icon: Clock,
+      className: "text-muted-foreground",
+      iconClassName: "",
     },
   };
 
-  const { label, dotColor, animate } = config[status];
+  const { label, icon: Icon, className, iconClassName } = config[status];
 
   return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <span
-        className={`h-2 w-2 rounded-full ${dotColor} ${
-          animate ? "animate-pulse" : ""
-        }`}
-      />
+    <div className={`flex items-center gap-1.5 text-xs ${className}`}>
+      <Icon className={`h-3.5 w-3.5 ${iconClassName}`} />
       {label}
     </div>
   );
