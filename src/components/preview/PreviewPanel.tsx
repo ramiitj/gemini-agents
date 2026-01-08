@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings, MousePointer, Loader2, RefreshCw } from "lucide-react";
+import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings, MousePointer, Loader2, RefreshCw, GitPullRequest } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DiffViewer from "./DiffViewer";
 import DeploymentStatus from "./DeploymentStatus";
@@ -7,11 +7,14 @@ import PreviewFrame from "./PreviewFrame";
 import FileList from "./FileList";
 import ElementInfoPanel from "./ElementInfoPanel";
 import BranchStatus from "./BranchStatus";
+import CreatePRModal from "./CreatePRModal";
 import { useDeployment } from "@/hooks/useDeployment";
 import { useCodeChanges } from "@/hooks/useCodeChanges";
 import { useChangeRequests } from "@/hooks/useChangeRequests";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useBranchDeployment } from "@/hooks/useBranchDeployment";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useOrganization } from "@/hooks/useOrganization";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
@@ -34,7 +37,10 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
   const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
   const [isSettingUpVercel, setIsSettingUpVercel] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [showPRModal, setShowPRModal] = useState(false);
   
+  const { organization } = useOrganization();
+  const { canMerge } = useUserRole(organization?.id);
   const { deployment, status, triggerDeployment } = useDeployment(vercelProjectId);
   const { changes, approveChanges } = useCodeChanges(projectId, conversationId);
   const { createChangeRequest } = useChangeRequests(projectId);
@@ -451,6 +457,20 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
           <RotateCcw className="h-3.5 w-3.5" />
           Undo
         </Button>
+        
+        {/* Create PR button - only for owners/admins with an active branch */}
+        {canMerge && session?.current_branch && session.current_branch !== 'main' && session.github_owner && session.github_repo && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setShowPRModal(true)}
+          >
+            <GitPullRequest className="h-3.5 w-3.5" />
+            Create PR
+          </Button>
+        )}
+        
         <Button 
           size="sm" 
           className="ml-auto gap-1.5"
@@ -468,6 +488,20 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
           }
         </Button>
       </div>
+
+      {/* Create PR Modal */}
+      {session?.github_owner && session?.github_repo && session?.current_branch && (
+        <CreatePRModal
+          open={showPRModal}
+          onOpenChange={setShowPRModal}
+          githubOwner={session.github_owner}
+          githubRepo={session.github_repo}
+          headBranch={session.current_branch}
+          onPRCreated={(prUrl) => {
+            toast.success("PR created! Review it on GitHub.");
+          }}
+        />
+      )}
     </div>
   );
 };
