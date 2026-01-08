@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.vercel-create-project]
 verify_jwt = false
+
+[functions.update-project-vercel]
+verify_jwt = false

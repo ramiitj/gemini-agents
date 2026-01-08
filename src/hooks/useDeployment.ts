@@ -38,7 +38,7 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
 
       console.log('Deployment status:', data);
 
-      if (data.status === 'ready') {
+      if (data.readyState === 'READY' || data.status === 'ready') {
         setStatus("deployed");
         setDeployment(prev => prev ? {
           ...prev,
@@ -51,7 +51,7 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
           clearInterval(pollingRef.current);
           pollingRef.current = null;
         }
-      } else if (data.status === 'error') {
+      } else if (data.readyState === 'ERROR' || data.status === 'error') {
         setStatus("failed");
         setDeployment(prev => prev ? {
           ...prev,

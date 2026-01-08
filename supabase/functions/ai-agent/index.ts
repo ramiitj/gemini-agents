@@ -872,46 +872,57 @@ async function executeTool(
         selector
       } = args;
       
-      const screenshotApiKey = Deno.env.get('SCREENSHOTONE_API_KEY');
-      
-      if (!screenshotApiKey) {
-        // Return a helpful message if API key not configured
+      // Use Google PageSpeed Insights API for screenshots (free, no API key needed)
+      try {
+        const strategy = viewport_width <= 768 ? 'mobile' : 'desktop';
+        const apiUrl = new URL('https://www.googleapis.com/pagespeedonline/v5/runPagespeed');
+        apiUrl.searchParams.set('url', url);
+        apiUrl.searchParams.set('strategy', strategy);
+        apiUrl.searchParams.set('category', 'performance');
+        
+        const response = await fetch(apiUrl.toString());
+        const data = await response.json();
+        
+        // Extract the screenshot from the audit
+        const screenshot = data.lighthouseResult?.audits?.['final-screenshot']?.details?.data;
+        const fullPageScreenshot = data.lighthouseResult?.audits?.['full-page-screenshot']?.details?.screenshot?.data;
+        
+        if (!screenshot && !fullPageScreenshot) {
+          return { 
+            result: { 
+              error: 'Could not capture screenshot via PageSpeed API',
+              url,
+              suggestion: 'Visit the URL directly or use analyze_visual_element when the user selects an element.',
+              api_error: data.error?.message
+            }, 
+            context 
+          };
+        }
+        
+        return {
+          result: {
+            screenshot_base64: full_page && fullPageScreenshot ? fullPageScreenshot : screenshot,
+            url,
+            strategy,
+            viewport_width,
+            viewport_height,
+            captured_at: new Date().toISOString(),
+            performance_score: data.lighthouseResult?.categories?.performance?.score,
+            first_contentful_paint: data.lighthouseResult?.audits?.['first-contentful-paint']?.displayValue,
+            largest_contentful_paint: data.lighthouseResult?.audits?.['largest-contentful-paint']?.displayValue
+          },
+          context
+        };
+      } catch (e: any) {
         return { 
           result: { 
-            error: 'SCREENSHOTONE_API_KEY not configured. To enable visual screenshots, add this secret.',
+            error: `Screenshot capture failed: ${e.message}`,
             url,
-            suggestion: 'You can still analyze the deployment by visiting the URL directly or using analyze_visual_element when the user selects an element.'
+            suggestion: 'Visit the URL directly or use analyze_visual_element when the user selects an element.'
           }, 
           context 
         };
       }
-      
-      const params = new URLSearchParams({
-        access_key: screenshotApiKey,
-        url: url,
-        viewport_width: viewport_width.toString(),
-        viewport_height: viewport_height.toString(),
-        full_page: full_page.toString(),
-        format: 'jpg',
-        response_type: 'json'
-      });
-      
-      if (selector) {
-        params.set('selector', selector);
-      }
-      
-      const response = await fetch(`https://api.screenshotone.com/take?${params}`);
-      const data = await response.json();
-      
-      return {
-        result: {
-          screenshot_url: data.screenshot_url || data.url,
-          width: viewport_width,
-          height: viewport_height,
-          captured_at: new Date().toISOString()
-        },
-        context
-      };
     }
 
     case 'analyze_visual_element': {
