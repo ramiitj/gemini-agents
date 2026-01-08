@@ -58,6 +58,110 @@ serve(async (req) => {
       throw new Error(data.error.message || JSON.stringify(data.error));
     }
     
+    // Commit vercel.json to enable iframe embedding
+    const githubToken = Deno.env.get('GITHUB_PAT');
+    if (githubToken) {
+      try {
+        const [owner, repoName] = repo.split('/');
+        const vercelConfig = {
+          headers: [
+            {
+              source: "/(.*)",
+              headers: [
+                { key: "X-Frame-Options", value: "ALLOWALL" },
+                { key: "Content-Security-Policy", value: "frame-ancestors *" }
+              ]
+            }
+          ]
+        };
+        
+        const ghHeaders = {
+          'Authorization': `Bearer ${githubToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        };
+        
+        // Get the default branch's latest commit
+        const refResponse = await fetch(
+          `https://api.github.com/repos/${owner}/${repoName}/git/ref/heads/main`,
+          { headers: ghHeaders }
+        );
+        const refData = await refResponse.json();
+        const baseSha = refData.object?.sha;
+        
+        if (baseSha) {
+          // Get the tree from that commit
+          const commitResponse = await fetch(
+            `https://api.github.com/repos/${owner}/${repoName}/git/commits/${baseSha}`,
+            { headers: ghHeaders }
+          );
+          const commitData = await commitResponse.json();
+          
+          // Create a blob for vercel.json
+          const blobResponse = await fetch(
+            `https://api.github.com/repos/${owner}/${repoName}/git/blobs`,
+            {
+              method: 'POST',
+              headers: ghHeaders,
+              body: JSON.stringify({
+                content: JSON.stringify(vercelConfig, null, 2),
+                encoding: 'utf-8'
+              })
+            }
+          );
+          const blobData = await blobResponse.json();
+          
+          // Create new tree with vercel.json
+          const treeResponse = await fetch(
+            `https://api.github.com/repos/${owner}/${repoName}/git/trees`,
+            {
+              method: 'POST',
+              headers: ghHeaders,
+              body: JSON.stringify({
+                base_tree: commitData.tree.sha,
+                tree: [{
+                  path: 'vercel.json',
+                  mode: '100644',
+                  type: 'blob',
+                  sha: blobData.sha
+                }]
+              })
+            }
+          );
+          const treeData = await treeResponse.json();
+          
+          // Create new commit
+          const newCommitResponse = await fetch(
+            `https://api.github.com/repos/${owner}/${repoName}/git/commits`,
+            {
+              method: 'POST',
+              headers: ghHeaders,
+              body: JSON.stringify({
+                message: 'Add vercel.json for iframe embedding support',
+                tree: treeData.sha,
+                parents: [baseSha]
+              })
+            }
+          );
+          const newCommitData = await newCommitResponse.json();
+          
+          // Update main branch reference
+          await fetch(
+            `https://api.github.com/repos/${owner}/${repoName}/git/refs/heads/main`,
+            {
+              method: 'PATCH',
+              headers: ghHeaders,
+              body: JSON.stringify({ sha: newCommitData.sha })
+            }
+          );
+          
+          console.log('Added vercel.json for iframe embedding');
+        }
+      } catch (e) {
+        console.log('Could not add vercel.json (non-critical):', e);
+      }
+    }
+    
     // Trigger initial deployment
     let deploymentData = null;
     try {
