@@ -1,91 +1,49 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { VISUAL_EDIT_SCRIPT, type ElementInfo } from "@/lib/visual-edit-injector";
+import VisualEditOverlay from "./VisualEditOverlay";
+import type { ElementInfo } from "@/lib/visual-edit-injector";
 
 interface PreviewFrameProps {
   url: string;
   showBefore: boolean;
   visualEditMode?: boolean;
   onElementSelected?: (element: ElementInfo) => void;
+  onVisualEditCancel?: () => void;
 }
 
-const PreviewFrame = ({ url, showBefore, visualEditMode = false, onElementSelected }: PreviewFrameProps) => {
+const PreviewFrame = ({ url, showBefore, visualEditMode = false, onElementSelected, onVisualEditCancel }: PreviewFrameProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [key, setKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [injected, setInjected] = useState(false);
 
   const handleRefresh = () => {
     setIsLoading(true);
-    setInjected(false);
     setKey((prev) => prev + 1);
   };
 
-  // Handle messages from iframe
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data.type === 'VISUAL_EDIT_ELEMENT_SELECTED' && onElementSelected) {
-        onElementSelected(event.data.data);
-      }
-      if (event.data.type === 'VISUAL_EDIT_READY') {
-        console.log('[PreviewFrame] Visual edit script ready in iframe');
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [onElementSelected]);
-
-  // Toggle visual edit mode in iframe
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (iframe?.contentWindow) {
-      iframe.contentWindow.postMessage({ type: 'VISUAL_EDIT_TOGGLE', active: visualEditMode }, '*');
-    }
-  }, [visualEditMode]);
-
-  // Inject visual edit script when iframe loads
   const handleLoad = () => {
     setIsLoading(false);
-    
-    if (visualEditMode && !injected) {
-      const iframe = iframeRef.current;
-      if (iframe?.contentWindow) {
-        try {
-          // Try to inject the script
-          const script = iframe.contentDocument?.createElement('script');
-          if (script) {
-            script.textContent = VISUAL_EDIT_SCRIPT;
-            iframe.contentDocument?.body.appendChild(script);
-            setInjected(true);
-          }
-        } catch (e) {
-          // Cross-origin - can't inject directly
-          console.log('[PreviewFrame] Cannot inject script (cross-origin)');
-        }
-      }
-    }
   };
 
-  // Re-inject when visual edit mode is enabled
-  useEffect(() => {
-    if (visualEditMode && !isLoading && !injected) {
-      const iframe = iframeRef.current;
-      if (iframe?.contentWindow) {
-        try {
-          const script = iframe.contentDocument?.createElement('script');
-          if (script) {
-            script.textContent = VISUAL_EDIT_SCRIPT;
-            iframe.contentDocument?.body.appendChild(script);
-            setInjected(true);
-          }
-        } catch (e) {
-          console.log('[PreviewFrame] Cannot inject script (cross-origin)');
-        }
-      }
+  // Handle overlay selection - convert coordinates to ElementInfo
+  const handleOverlaySelect = (coords: { x: number; y: number }, description?: string) => {
+    if (onElementSelected) {
+      // Create coordinate-based element info for the AI to analyze
+      onElementSelected({
+        selector: `click:${Math.round(coords.x)},${Math.round(coords.y)}`,
+        tagName: 'visual-selection',
+        className: '',
+        id: '',
+        textContent: description || '',
+        innerHTML: '',
+        outerHTML: '',
+        computedStyles: {},
+        boundingBox: { x: coords.x, y: coords.y, width: 20, height: 20, top: coords.y, left: coords.x },
+        attributes: {}
+      });
     }
-  }, [visualEditMode, isLoading, injected]);
+  };
 
   // Mock: show placeholder for before state
   if (showBefore) {
@@ -146,6 +104,14 @@ const PreviewFrame = ({ url, showBefore, visualEditMode = false, onElementSelect
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
         referrerPolicy="no-referrer-when-downgrade"
       />
+
+      {/* Visual Edit Overlay - rendered on top of iframe */}
+      {visualEditMode && !isLoading && (
+        <VisualEditOverlay
+          onElementSelect={handleOverlaySelect}
+          onCancel={onVisualEditCancel || (() => {})}
+        />
+      )}
     </div>
   );
 };
