@@ -1,6 +1,7 @@
 import { useParams, Navigate } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import AppSidebar from "@/components/layout/AppSidebar";
 import ChatContainer, { VisualContext } from "@/components/chat/ChatContainer";
 import PreviewPanel from "@/components/preview/PreviewPanel";
@@ -28,13 +29,14 @@ function parseGitHubUrl(url: string) {
 
 const Project = () => {
   const { id } = useParams();
+  const { user, loading: authLoading } = useAuth();
   const { organization } = useOrganization();
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
   const [visualContext, setVisualContext] = useState<VisualContext | null>(null);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !user) return;
 
     const fetchProject = async () => {
       const { data, error } = await supabase
@@ -50,7 +52,7 @@ const Project = () => {
     };
 
     fetchProject();
-  }, [id]);
+  }, [id, user]);
 
   const handleSendToAI = useCallback((element: ElementInfo, request: string) => {
     setVisualContext({ element, request });
@@ -64,7 +66,12 @@ const Project = () => {
     setProject(prev => prev ? { ...prev, vercel_project_id: newVercelProjectId } : null);
   }, []);
 
-  if (loading) {
+  // Redirect if not authenticated
+  if (!authLoading && !user) {
+    return <Navigate to="/auth" />;
+  }
+
+  if (authLoading || loading) {
     return (
       <SidebarProvider>
         <div className="flex min-h-screen w-full">

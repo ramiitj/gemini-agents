@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Message {
   id: string;
@@ -22,6 +23,7 @@ interface Conversation {
 }
 
 export function useConversation(projectId: string | undefined) {
+  const { user } = useAuth();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -30,31 +32,35 @@ export function useConversation(projectId: string | undefined) {
 
   // Fetch or create conversation
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || !user) return;
     
     const fetchOrCreateConversation = async () => {
       setIsLoading(true);
       try {
-        // Try to get existing conversation
+        // Try to get existing conversation - use maybeSingle to avoid error on 0 rows
         const { data: existing, error: fetchError } = await supabase
           .from('conversations')
           .select('*')
           .eq('project_id', projectId)
           .order('created_at', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
+
+        if (fetchError) {
+          console.error('Error fetching conversation:', fetchError);
+          throw fetchError;
+        }
 
         if (existing) {
           setConversation(existing);
           await fetchMessages(existing.id);
         } else {
-          // Create new conversation
-          const { data: { user } } = await supabase.auth.getUser();
+          // Create new conversation using auth context user
           const { data: newConv, error: createError } = await supabase
             .from('conversations')
             .insert({
               project_id: projectId,
-              created_by: user?.id,
+              created_by: user.id,
               title: 'New conversation'
             })
             .select()
@@ -80,7 +86,7 @@ export function useConversation(projectId: string | undefined) {
     };
 
     fetchOrCreateConversation();
-  }, [projectId]);
+  }, [projectId, user]);
 
   const fetchMessages = async (conversationId: string) => {
     const { data, error } = await supabase
@@ -158,7 +164,7 @@ export function useConversation(projectId: string | undefined) {
     visualContext?: any,
     mode: "chat" | "execution" = "execution"
   ) => {
-    if (!conversation?.id || !projectId) return;
+    if (!conversation?.id || !projectId || !user) return;
 
     setIsSending(true);
     
@@ -172,7 +178,6 @@ export function useConversation(projectId: string | undefined) {
     setMessages(prev => [...prev, userMessage]);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       
       // Save user message to database
       const { data: savedUserMsg, error: userMsgError } = await supabase
@@ -245,7 +250,7 @@ export function useConversation(projectId: string | undefined) {
     } finally {
       setIsSending(false);
     }
-  }, [conversation?.id, projectId, messages, toast]);
+  }, [conversation?.id, projectId, messages, toast, user]);
 
   return {
     conversation,
