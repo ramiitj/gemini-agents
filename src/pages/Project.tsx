@@ -100,7 +100,11 @@ const Project = () => {
               <ChatContainer projectId={project.id} githubRepo={project.github_repo} />
             </div>
             <div className="flex w-1/2 flex-col">
-              <PreviewPanel />
+              <PreviewPanel 
+                projectId={project.id}
+                vercelProjectId={project.vercel_project_id}
+                githubRepo={project.github_repo}
+              />
             </div>
             <TeamSidebar organizationId={organization?.id || null} />
           </div>
