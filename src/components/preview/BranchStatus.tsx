@@ -1,4 +1,4 @@
-import { GitBranch, ExternalLink, Loader2, CheckCircle, XCircle, Clock } from "lucide-react";
+import { GitBranch, ExternalLink, Loader2, CheckCircle, XCircle, Clock, Rocket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { BranchDeployment } from "@/hooks/useBranchDeployment";
 
@@ -21,9 +21,13 @@ const BranchStatus = ({ branch, deployment, loading, githubOwner, githubRepo }: 
       case "READY":
         return <CheckCircle className="h-3 w-3 text-green-500" />;
       case "BUILDING":
-      case "QUEUED":
         return <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />;
+      case "QUEUED":
+        return <Rocket className="h-3 w-3 text-blue-500" />;
+      case "WAITING":
+        return <Clock className="h-3 w-3 text-muted-foreground" />;
       case "ERROR":
+      case "CANCELED":
         return <XCircle className="h-3 w-3 text-destructive" />;
       default:
         return <Clock className="h-3 w-3" />;
@@ -38,10 +42,35 @@ const BranchStatus = ({ branch, deployment, loading, githubOwner, githubRepo }: 
       case "BUILDING":
       case "QUEUED":
         return "outline";
+      case "WAITING":
+        return "secondary";
       case "ERROR":
+      case "CANCELED":
         return "destructive";
       default:
         return "secondary";
+    }
+  };
+
+  const getStatusText = () => {
+    if (loading) return "Loading...";
+    if (!deployment) return "No deployment";
+    
+    switch (deployment.state) {
+      case "READY":
+        return "Ready";
+      case "BUILDING":
+        return "Building...";
+      case "QUEUED":
+        return "Queued";
+      case "WAITING":
+        return "Waiting for build";
+      case "ERROR":
+        return "Failed";
+      case "CANCELED":
+        return "Canceled";
+      default:
+        return deployment.state;
     }
   };
 
@@ -66,12 +95,10 @@ const BranchStatus = ({ branch, deployment, loading, githubOwner, githubRepo }: 
         )}
       </div>
 
-      {(deployment || loading) && (
-        <Badge variant={getStatusVariant()} className="gap-1 text-[10px] px-1.5 py-0">
-          {getStatusIcon()}
-          {loading ? "Loading..." : deployment?.state || "No deployment"}
-        </Badge>
-      )}
+      <Badge variant={getStatusVariant()} className="gap-1 text-[10px] px-1.5 py-0">
+        {getStatusIcon()}
+        {getStatusText()}
+      </Badge>
 
       {deployment?.url && deployment.state === "READY" && (
         <a

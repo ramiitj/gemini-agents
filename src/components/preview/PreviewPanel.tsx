@@ -99,8 +99,40 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
 
     setIsApproving(true);
     try {
-      // Approve all pending changes
+      // Approve all pending changes in database
       await approveChanges(unapprovedChanges.map(c => c.id));
+
+      // Push changes to GitHub if we have session context
+      if (session?.current_branch && session?.github_owner && session?.github_repo) {
+        const filesToCommit = unapprovedChanges
+          .filter(c => c.modified_content) // Only files with content
+          .map(c => ({
+            path: c.file_path,
+            content: c.modified_content
+          }));
+
+        if (filesToCommit.length > 0) {
+          toast.info("Pushing changes to GitHub...");
+          
+          const { error: pushError } = await supabase.functions.invoke('github-commit-push', {
+            body: {
+              owner: session.github_owner,
+              repo: session.github_repo,
+              branch: session.current_branch,
+              message: `Approved ${unapprovedChanges.length} AI-generated changes`,
+              files: filesToCommit,
+              baseBranch: session.current_branch
+            }
+          });
+
+          if (pushError) {
+            console.error('Failed to push to GitHub:', pushError);
+            toast.error('Changes approved but failed to push to GitHub');
+          } else {
+            toast.success("Changes pushed! Vercel will auto-deploy.");
+          }
+        }
+      }
 
       // Create a change request for team visibility
       const filePaths = unapprovedChanges.map(c => c.file_path).join(", ");
@@ -379,6 +411,7 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
                 showBefore={showBefore}
                 visualEditMode={visualEditMode}
                 onElementSelected={handleElementSelected}
+                onVisualEditCancel={() => setVisualEditMode(false)}
               />
             ) : (
               <IdleState onDeploy={() => triggerDeployment()} />
