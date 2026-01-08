@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings } from "lucide-react";
+import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings, MousePointer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DiffViewer from "./DiffViewer";
 import DeploymentStatus from "./DeploymentStatus";
 import PreviewFrame from "./PreviewFrame";
 import FileList from "./FileList";
+import ElementInfoPanel from "./ElementInfoPanel";
 import { useDeployment } from "@/hooks/useDeployment";
+import type { ElementInfo } from "@/lib/visual-edit-injector";
 
 type Tab = "preview" | "changes" | "files";
 
@@ -13,11 +15,14 @@ interface PreviewPanelProps {
   projectId: string;
   vercelProjectId: string | null;
   githubRepo: string | null;
+  onSendToAI?: (element: ElementInfo, request: string) => void;
 }
 
-const PreviewPanel = ({ projectId, vercelProjectId, githubRepo }: PreviewPanelProps) => {
+const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI }: PreviewPanelProps) => {
   const [activeTab, setActiveTab] = useState<Tab>("preview");
   const [showBefore, setShowBefore] = useState(false);
+  const [visualEditMode, setVisualEditMode] = useState(false);
+  const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
   const { deployment, status, triggerDeployment } = useDeployment(vercelProjectId);
 
   const tabs: { id: Tab; label: string }[] = [
@@ -29,6 +34,30 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo }: PreviewPanelPr
   const previewUrl = deployment?.url 
     ? (deployment.url.startsWith('http') ? deployment.url : `https://${deployment.url}`)
     : null;
+
+  const handleElementSelected = (element: ElementInfo) => {
+    setSelectedElement(element);
+  };
+
+  const handleSendToAI = (request: string) => {
+    if (selectedElement && onSendToAI) {
+      onSendToAI(selectedElement, request);
+      setSelectedElement(null);
+      setVisualEditMode(false);
+    }
+  };
+
+  const handleCloseElementPanel = () => {
+    setSelectedElement(null);
+  };
+
+  const toggleVisualEditMode = () => {
+    const newMode = !visualEditMode;
+    setVisualEditMode(newMode);
+    if (!newMode) {
+      setSelectedElement(null);
+    }
+  };
 
   // Show setup state if no Vercel project is configured
   if (!vercelProjectId) {
@@ -99,7 +128,7 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo }: PreviewPanelPr
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="relative flex-1 overflow-auto">
         {activeTab === "preview" && (
           <div className="flex h-full flex-col animate-fade-in">
             {/* Preview header */}
@@ -133,6 +162,18 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo }: PreviewPanelPr
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* Visual Edit Toggle */}
+                {previewUrl && (
+                  <Button
+                    variant={visualEditMode ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={toggleVisualEditMode}
+                  >
+                    <MousePointer className="h-3 w-3" />
+                    {visualEditMode ? "Exit Edit" : "Visual Edit"}
+                  </Button>
+                )}
                 {status === "idle" && (
                   <Button
                     variant="outline"
@@ -170,9 +211,23 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo }: PreviewPanelPr
             ) : status === "idle" && !previewUrl ? (
               <IdleState onDeploy={() => triggerDeployment()} />
             ) : previewUrl ? (
-              <PreviewFrame url={previewUrl} showBefore={showBefore} />
+              <PreviewFrame 
+                url={previewUrl} 
+                showBefore={showBefore}
+                visualEditMode={visualEditMode}
+                onElementSelected={handleElementSelected}
+              />
             ) : (
               <IdleState onDeploy={() => triggerDeployment()} />
+            )}
+
+            {/* Element Info Panel */}
+            {selectedElement && (
+              <ElementInfoPanel
+                element={selectedElement}
+                onClose={handleCloseElementPanel}
+                onSendToAI={handleSendToAI}
+              />
             )}
           </div>
         )}
