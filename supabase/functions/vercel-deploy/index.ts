@@ -35,11 +35,10 @@ serve(async (req) => {
     const projectData = await projectResponse.json();
     console.log('Project data:', JSON.stringify(projectData, null, 2));
     
-    // If project has a linked repo, use the simpler deployment approach
+    // Build deployment body - omit target for preview deployments
     const deploymentBody: any = {
       name: projectId,
-      project: projectId,
-      target: 'preview'
+      project: projectId
     };
     
     // Only add gitSource if we have the required repoId
