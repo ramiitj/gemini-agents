@@ -77,6 +77,9 @@ serve(async (req) => {
 
       console.log('Injected base tag with origin:', targetOrigin);
 
+      // EXPLICITLY set Content-Type to text/html - ensures browser renders as HTML
+      newHeaders.set('Content-Type', 'text/html; charset=utf-8');
+
       return new Response(html, {
         status: response.status,
         headers: newHeaders,
