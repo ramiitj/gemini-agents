@@ -7,11 +7,12 @@ import ModeToggle from "./ModeToggle";
 interface ChatInputProps {
   onSend: (content: string) => void;
   disabled?: boolean;
+  sessionLoading?: boolean;
   mode?: "chat" | "execution";
   onModeChange?: (mode: "chat" | "execution") => void;
 }
 
-const ChatInput = ({ onSend, disabled, mode = "chat", onModeChange }: ChatInputProps) => {
+const ChatInput = ({ onSend, disabled, sessionLoading, mode = "execution", onModeChange }: ChatInputProps) => {
   const [value, setValue] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -58,7 +59,7 @@ const ChatInput = ({ onSend, disabled, mode = "chat", onModeChange }: ChatInputP
           type="submit" 
           size="icon" 
           className="shrink-0 self-end"
-          disabled={!value.trim() || disabled}
+          disabled={!value.trim() || disabled || sessionLoading}
         >
           <Send className="h-4 w-4" />
         </Button>
