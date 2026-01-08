@@ -101,9 +101,9 @@ const toolDefinitions = [
       type: 'OBJECT',
       properties: {
         commit_message: { type: 'STRING', description: 'Descriptive commit message' },
-        branch: { type: 'STRING', description: 'Branch to push to' }
+        branch: { type: 'STRING', description: 'Branch to push to (optional - uses current branch if not specified)' }
       },
-      required: ['commit_message', 'branch']
+      required: ['commit_message']
     }
   },
   {
@@ -200,6 +200,18 @@ const toolDefinitions = [
       required: ['repo_url', 'head_branch', 'base_branch', 'title']
     }
   }
+];
+
+// Read-only tools for chat mode
+const chatModeTools = [
+  'file_read',
+  'list_directory', 
+  'search_code',
+  'generate_diff',
+  'capture_screenshot',
+  'analyze_visual_element',
+  'vercel_get_deployment_status',
+  'get_build_logs'
 ];
 
 // Generate unified diff for file changes
@@ -332,6 +344,70 @@ interface ToolContext {
   currentRepo?: { owner: string; repo: string; branch: string };
   lastDeploymentId?: string;
   lastVercelProjectId?: string;
+  projectId?: string;
+  conversationId?: string;
+  userId?: string;
+}
+
+// Load agent session from database
+async function loadAgentSession(
+  supabaseUrl: string,
+  supabaseKey: string,
+  projectId: string,
+  userId: string
+): Promise<any | null> {
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/agent_sessions?project_id=eq.${projectId}&user_id=eq.${userId}&select=*`,
+      {
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    const sessions = await response.json();
+    return sessions?.[0] || null;
+  } catch (e) {
+    console.error('Failed to load agent session:', e);
+    return null;
+  }
+}
+
+// Save agent session to database
+async function saveAgentSession(
+  supabaseUrl: string,
+  supabaseKey: string,
+  projectId: string,
+  userId: string,
+  context: ToolContext,
+  mode: string
+): Promise<void> {
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/agent_sessions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'apikey': supabaseKey,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({
+        project_id: projectId,
+        user_id: userId,
+        github_owner: context.currentRepo?.owner || null,
+        github_repo: context.currentRepo?.repo || null,
+        current_branch: context.currentRepo?.branch || null,
+        staged_files: context.stagedFiles,
+        vercel_project_id: context.lastVercelProjectId || null,
+        agent_mode: mode,
+        updated_at: new Date().toISOString()
+      })
+    });
+  } catch (e) {
+    console.error('Failed to save agent session:', e);
+  }
 }
 
 // Execute a tool call
@@ -344,6 +420,8 @@ async function executeTool(
   
   const githubToken = Deno.env.get('GITHUB_PAT');
   const vercelToken = Deno.env.get('VERCEL_TOKEN');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   
   const githubHeaders = {
     'Authorization': `Bearer ${githubToken}`,
@@ -362,11 +440,51 @@ async function executeTool(
       }
       
       const [, owner, repo] = match;
-      context.currentRepo = { owner, repo: repo.replace('.git', ''), branch };
+      
+      // If we have a userId, create/use a user-specific branch
+      let targetBranch = branch;
+      if (context.userId && branch === 'main') {
+        // Create a user-specific branch name
+        const userPrefix = context.userId.substring(0, 8);
+        targetBranch = `user/${userPrefix}`;
+        
+        // Check if branch exists, if not create it from main
+        const branchCheckRes = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${targetBranch}`,
+          { headers: githubHeaders }
+        );
+        
+        if (branchCheckRes.status === 404) {
+          // Get main branch SHA
+          const mainRef = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/main`,
+            { headers: githubHeaders }
+          );
+          const mainData = await mainRef.json();
+          
+          if (mainData.object?.sha) {
+            // Create branch from main
+            await fetch(
+              `https://api.github.com/repos/${owner}/${repo}/git/refs`,
+              {
+                method: 'POST',
+                headers: { ...githubHeaders, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  ref: `refs/heads/${targetBranch}`,
+                  sha: mainData.object.sha
+                })
+              }
+            );
+            console.log(`Created user branch: ${targetBranch}`);
+          }
+        }
+      }
+      
+      context.currentRepo = { owner, repo: repo.replace('.git', ''), branch: targetBranch };
       
       // Get file tree
       const response = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
+        `https://api.github.com/repos/${owner}/${repo}/git/trees/${targetBranch}?recursive=1`,
         { headers: githubHeaders }
       );
       const data = await response.json();
@@ -382,7 +500,7 @@ async function executeTool(
           cloned: true, 
           owner, 
           repo, 
-          branch,
+          branch: targetBranch,
           fileCount: files.length,
           files: files.slice(0, 50) // Return first 50 files for context
         },
@@ -429,11 +547,7 @@ async function executeTool(
       }
       
       // Store change in database for UI display
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      
-      // Get projectId from the request context (passed through args or global)
-      if (supabaseUrl && supabaseKey && (args as any)._projectId) {
+      if (supabaseUrl && supabaseKey && context.projectId) {
         try {
           const diff = generateUnifiedDiff(file_path, original, content);
           const additions = diff.split('\n').filter((l: string) => l.startsWith('+') && !l.startsWith('+++')).length;
@@ -448,8 +562,8 @@ async function executeTool(
               'Prefer': 'return=minimal'
             },
             body: JSON.stringify({
-              project_id: (args as any)._projectId,
-              conversation_id: (args as any)._conversationId || null,
+              project_id: context.projectId,
+              conversation_id: context.conversationId || null,
               file_path,
               status: original ? 'modified' : 'added',
               original_content: original,
@@ -459,6 +573,7 @@ async function executeTool(
               deletions
             })
           });
+          console.log(`Stored code change for ${file_path}`);
         } catch (e) {
           console.error('Failed to store code change:', e);
         }
@@ -623,13 +738,15 @@ async function executeTool(
     }
 
     case 'git_add_commit_push': {
-      const { commit_message, branch } = args;
+      const { commit_message, branch: explicitBranch } = args;
       
       if (!context.currentRepo) {
         return { result: { error: 'No repository cloned. Use github_clone_repo first.' }, context };
       }
       
       const { owner, repo } = context.currentRepo;
+      // Use explicit branch if provided, otherwise use current branch from context
+      const branch = explicitBranch || context.currentRepo.branch;
       const baseBranch = context.currentRepo.branch;
       
       // Get the base branch's latest commit
@@ -1075,9 +1192,36 @@ serve(async (req) => {
   }
 
   try {
-    const { message, conversationId, projectId, history = [], githubRepo, visualContext } = await req.json();
+    const { 
+      message, 
+      conversationId, 
+      projectId, 
+      history = [], 
+      githubRepo, 
+      visualContext,
+      mode = 'execution',
+      userId 
+    } = await req.json();
     
-    console.log('AI Agent received request:', { message, conversationId, projectId, githubRepo, hasVisualContext: !!visualContext });
+    console.log('AI Agent received request:', { 
+      message, 
+      conversationId, 
+      projectId, 
+      githubRepo, 
+      hasVisualContext: !!visualContext,
+      mode,
+      userId: userId?.substring(0, 8) 
+    });
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    // Load existing session from database
+    let existingSession = null;
+    if (supabaseUrl && supabaseKey && projectId && userId) {
+      existingSession = await loadAgentSession(supabaseUrl, supabaseKey, projectId, userId);
+      console.log('Loaded existing session:', existingSession ? 'found' : 'none');
+    }
     
     // Parse service account
     const serviceAccountJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON');
@@ -1090,8 +1234,59 @@ serve(async (req) => {
     // Get access token
     const accessToken = await getGoogleAccessToken(serviceAccount);
     
+    // Initialize tool context from existing session
+    let toolContext: ToolContext = { 
+      stagedFiles: existingSession?.staged_files || {},
+      projectId,
+      conversationId,
+      userId
+    };
+    
+    // Restore repo context from session
+    if (existingSession?.github_owner && existingSession?.github_repo) {
+      toolContext.currentRepo = {
+        owner: existingSession.github_owner,
+        repo: existingSession.github_repo,
+        branch: existingSession.current_branch || 'main'
+      };
+    }
+    
+    if (existingSession?.vercel_project_id) {
+      toolContext.lastVercelProjectId = existingSession.vercel_project_id;
+    }
+    
+    // Mode-specific instructions
+    const modeInstructions = mode === 'chat' 
+      ? `## IMPORTANT: CHAT MODE ACTIVE
+You are in CHAT mode. You can ONLY:
+- Discuss plans and explain approaches
+- Answer questions about the codebase  
+- Read files and search code to understand context
+- Capture screenshots for visual analysis
+- Suggest what changes would be needed
+
+You CANNOT and MUST NOT use these tools:
+- file_write (blocked)
+- file_delete (blocked)
+- git_add_commit_push (blocked)
+- vercel_create_project (blocked)
+- vercel_trigger_deployment (blocked)
+- github_create_pull_request (blocked)
+
+If the user asks you to make changes, explain what you WOULD do and suggest they switch to Execute mode to apply changes.`
+      : `## EXECUTION MODE ACTIVE
+You are in EXECUTION mode. You have full access to all tools and can:
+- Read, write, and delete files
+- Commit and push changes to the user's branch
+- Trigger deployments
+- Create pull requests
+
+Proceed with code changes as requested. Always push to the user's branch (not main).`;
+
     // Build comprehensive system prompt per specification
     const systemPrompt = `You are an autonomous AI coding agent for Product Compass, a collaborative product development platform. Your role is to translate natural language requests into precise code changes, deploy previews, and facilitate team approvals.
+
+${modeInstructions}
 
 ## Core Behaviors
 
@@ -1109,26 +1304,26 @@ serve(async (req) => {
 
 For each user request:
 1. Acknowledge the request and explain your plan
-2. Clone/pull the latest code from the specified branch
+2. Clone/pull the latest code from the specified branch (this automatically creates your user branch)
 3. Read relevant files to understand context
 4. Generate minimal code changes
 5. Show the diff to the user for feedback
-6. If approved, commit and push changes
-7. Trigger Vercel deployment and poll for status
-8. Report preview URL when ready
-9. On approval, create GitHub Pull Request
+6. If approved, commit and push changes (branch is automatic, don't ask)
+7. Vercel will automatically deploy the branch
+8. Report when changes are pushed
+9. On approval, create GitHub Pull Request to merge to main
 
 ## Available Tools (15 total)
 
 ### Repository Tools
-- github_clone_repo - Clone repository for fresh context
+- github_clone_repo - Clone repository for fresh context (auto-creates user branch)
 - file_read - Read file contents (always do this before writing)
 - file_write - Create or modify files
 - file_delete - Remove files (requires confirmation)
 - list_directory - Browse directory structure
 - search_code - Find code patterns across the repo
 - generate_diff - Preview changes before committing
-- git_add_commit_push - Commit and push changes
+- git_add_commit_push - Commit and push changes (branch is automatic)
 
 ### Vercel Tools
 - vercel_create_project - Create new Vercel project from GitHub repo
@@ -1151,7 +1346,7 @@ When the user sends a message with visual element context (they selected an elem
 3. Use file_read to get the full component code
 4. Identify the specific JSX that renders this element
 5. Make targeted changes based on user request
-6. Show diff and deploy for visual verification
+6. Show diff and push for automatic deployment
 
 ## Safety Rules
 
@@ -1159,9 +1354,11 @@ When the user sends a message with visual element context (they selected an elem
 - Never expose API keys or secrets in code
 - Never modify .env files or configuration that could break the build
 - If a request seems destructive, ask for confirmation first
+- Always push to user branches, never directly to main
 
 ## Current Context
-- GitHub Repository: ${githubRepo || 'Not connected'}
+- GitHub Repository: ${githubRepo || existingSession?.github_repo ? `https://github.com/${existingSession?.github_owner || ''}/${existingSession?.github_repo || githubRepo}` : 'Not connected'}
+- Current Branch: ${toolContext.currentRepo?.branch || 'Not set (will be created on clone)'}
 - Project ID: ${projectId}
 - Conversation ID: ${conversationId}
 ${visualContext ? `
@@ -1186,7 +1383,7 @@ User Request: ${message}`;
 
     const messages: any[] = [
       { role: 'user', parts: [{ text: systemPrompt }] },
-      { role: 'model', parts: [{ text: 'I understand. I am ready to help you with code changes following the specified workflow and safety rules. I have access to 15 tools including visual inspection and Vercel project creation capabilities.' }] },
+      { role: 'model', parts: [{ text: `I understand. I am ready to help you with code changes following the specified workflow and safety rules. I am currently in ${mode.toUpperCase()} mode${mode === 'chat' ? ' (read-only, planning)' : ' (full tool access)'}. I have access to 15 tools including visual inspection and Vercel project creation capabilities.` }] },
       ...history.map((m: any) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }]
@@ -1194,8 +1391,13 @@ User Request: ${message}`;
       { role: 'user', parts: [{ text: userMessage }] }
     ];
 
-    // Context for tool execution
-    let toolContext: ToolContext = { stagedFiles: {} };
+    // Filter tools based on mode
+    const activeTools = mode === 'chat'
+      ? toolDefinitions.filter(t => chatModeTools.includes(t.name))
+      : toolDefinitions;
+    
+    console.log(`Mode: ${mode}, Active tools: ${activeTools.length}`);
+
     let finalResponse = '';
     let iterations = 0;
     const maxIterations = 15;
@@ -1218,7 +1420,7 @@ User Request: ${message}`;
         },
         body: JSON.stringify({
           contents: messages,
-          tools: [{ functionDeclarations: toolDefinitions }],
+          tools: [{ functionDeclarations: activeTools }],
           toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
           generationConfig: {
             temperature: 0.2,
@@ -1253,6 +1455,21 @@ User Request: ${message}`;
           const { name, args } = part.functionCall;
           
           console.log(`Tool call: ${name}`, args);
+          
+          // Double-check mode enforcement (belt and suspenders)
+          if (mode === 'chat' && !chatModeTools.includes(name)) {
+            toolResults.push({
+              functionResponse: {
+                name,
+                response: { 
+                  error: `Tool "${name}" is not available in Chat mode. Switch to Execute mode to use this tool.`,
+                  blocked: true,
+                  mode: 'chat'
+                }
+              }
+            });
+            continue;
+          }
           
           const { result, context } = await executeTool(name, args || {}, toolContext);
           toolContext = context;
@@ -1295,13 +1512,21 @@ User Request: ${message}`;
       }
     }
 
+    // Save session back to database
+    if (supabaseUrl && supabaseKey && projectId && userId) {
+      await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, toolContext, mode);
+      console.log('Saved agent session');
+    }
+
     console.log('Agent completed with final response:', finalResponse.substring(0, 200));
 
     return new Response(
       JSON.stringify({ 
         response: finalResponse,
         iterations,
-        success: true
+        success: true,
+        mode,
+        branch: toolContext.currentRepo?.branch
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
