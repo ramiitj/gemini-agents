@@ -766,17 +766,38 @@ async function executeTool(
     case 'vercel_trigger_deployment': {
       const { project_id, branch } = args;
       
+      // First fetch project data to get repoId
+      const projectResponse = await fetch(
+        `https://api.vercel.com/v9/projects/${project_id}`,
+        { headers: { 'Authorization': `Bearer ${vercelToken}` } }
+      );
+      const projectData = await projectResponse.json();
+      
+      if (projectData.error) {
+        return { result: { error: projectData.error.message }, context };
+      }
+      
+      const deploymentBody: any = {
+        name: project_id,
+        project: project_id
+      };
+      
+      // Only add gitSource if we have the required repoId
+      if (projectData.link?.repoId) {
+        deploymentBody.gitSource = {
+          type: 'github',
+          ref: branch || 'main',
+          repoId: projectData.link.repoId
+        };
+      }
+      
       const response = await fetch('https://api.vercel.com/v13/deployments', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${vercelToken}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          name: project_id,
-          project: project_id,
-          gitSource: { type: 'github', ref: branch }
-        })
+        body: JSON.stringify(deploymentBody)
       });
       
       const data = await response.json();

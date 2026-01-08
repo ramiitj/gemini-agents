@@ -143,7 +143,8 @@ const PreviewFrame = ({ url, showBefore, visualEditMode = false, onElementSelect
         className="h-full w-full border-0"
         onLoad={handleLoad}
         title="Preview"
-        sandbox="allow-scripts allow-same-origin allow-forms"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+        referrerPolicy="no-referrer-when-downgrade"
       />
     </div>
   );
