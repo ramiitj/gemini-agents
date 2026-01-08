@@ -33,11 +33,13 @@ interface ChatContainerProps {
 
 const ChatContainer = ({ projectId, githubRepo, visualContext, onVisualContextHandled }: ChatContainerProps) => {
   const { messages, isLoading, isSending, sendMessage } = useConversation(projectId);
-  const { session, updateMode } = useAgentSession(projectId);
+  const { session, loading: sessionLoading, updateMode } = useAgentSession(projectId);
 
-  const mode = session?.agent_mode || "chat";
+  // Default to "execution" mode, only use session mode after it loads
+  const mode = sessionLoading ? "execution" : (session?.agent_mode as "chat" | "execution") || "execution";
 
   const handleSend = (content: string, context?: VisualContext) => {
+    if (sessionLoading) return; // Don't send until session loaded
     sendMessage(content, githubRepo || undefined, context?.element, mode);
   };
 
@@ -92,6 +94,7 @@ const ChatContainer = ({ projectId, githubRepo, visualContext, onVisualContextHa
       <ChatInput 
         onSend={(content) => handleSend(content)} 
         disabled={isSending}
+        sessionLoading={sessionLoading}
         mode={mode}
         onModeChange={handleModeChange}
       />

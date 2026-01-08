@@ -41,8 +41,30 @@ export function useAgentSession(projectId: string | undefined) {
 
       if (error) {
         console.error('Error fetching agent session:', error);
+        setLoading(false);
+        return;
+      }
+      
+      if (data) {
+        setSession(data as AgentSession);
       } else {
-        setSession(data as AgentSession | null);
+        // No session exists - create one with execution mode as default
+        const { data: newSession, error: createError } = await supabase
+          .from('agent_sessions')
+          .insert({
+            project_id: projectId,
+            user_id: user.id,
+            agent_mode: 'execution', // Default to execution mode
+            staged_files: {}
+          })
+          .select()
+          .single();
+        
+        if (createError) {
+          console.error('Error creating agent session:', createError);
+        } else if (newSession) {
+          setSession(newSession as AgentSession);
+        }
       }
     } catch (e) {
       console.error('Error fetching session:', e);

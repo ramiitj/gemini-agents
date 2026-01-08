@@ -202,8 +202,9 @@ const toolDefinitions = [
   }
 ];
 
-// Read-only tools for chat mode
+// Read-only tools for chat mode (including clone to establish context)
 const chatModeTools = [
+  'github_clone_repo', // Allowed in chat mode to establish repo context
   'file_read',
   'list_directory', 
   'search_code',
@@ -1255,33 +1256,61 @@ serve(async (req) => {
       toolContext.lastVercelProjectId = existingSession.vercel_project_id;
     }
     
+    // Auto-clone if repo provided but not in context
+    if (githubRepo && !toolContext.currentRepo) {
+      console.log('Auto-cloning repository for context:', githubRepo);
+      try {
+        const { result, context: newContext } = await executeTool('github_clone_repo', { 
+          repo_url: githubRepo, 
+          branch: 'main' 
+        }, toolContext);
+        toolContext = newContext;
+        console.log('Auto-clone result:', result.cloned ? 'success' : 'failed', 'branch:', toolContext.currentRepo?.branch);
+      } catch (e) {
+        console.error('Auto-clone failed:', e);
+      }
+    }
+
     // Mode-specific instructions
     const modeInstructions = mode === 'chat' 
-      ? `## IMPORTANT: CHAT MODE ACTIVE
-You are in CHAT mode. You can ONLY:
-- Discuss plans and explain approaches
-- Answer questions about the codebase  
-- Read files and search code to understand context
-- Capture screenshots for visual analysis
-- Suggest what changes would be needed
+      ? `## CHAT MODE - PLANNING AND ANALYSIS
+You are in CHAT mode for planning and discussion.
 
-You CANNOT and MUST NOT use these tools:
-- file_write (blocked)
-- file_delete (blocked)
-- git_add_commit_push (blocked)
-- vercel_create_project (blocked)
-- vercel_trigger_deployment (blocked)
-- github_create_pull_request (blocked)
+ALLOWED actions (you CAN use these tools):
+- github_clone_repo - Clone/access repository to understand the codebase
+- file_read - Read files to analyze code
+- search_code - Search for code patterns
+- list_directory - Explore project structure
+- generate_diff - Preview what changes would look like
+- capture_screenshot - Take screenshots for visual analysis
+- analyze_visual_element - Analyze selected elements
+- vercel_get_deployment_status - Check deployment status
+- get_build_logs - View build logs
 
-If the user asks you to make changes, explain what you WOULD do and suggest they switch to Execute mode to apply changes.`
-      : `## EXECUTION MODE ACTIVE
-You are in EXECUTION mode. You have full access to all tools and can:
+BLOCKED actions (do NOT attempt these - tell user to switch to Execute mode):
+- file_write, file_delete
+- git_add_commit_push
+- vercel_create_project, vercel_trigger_deployment
+- github_create_pull_request
+
+START by cloning the repo if not already done, then analyze code and discuss plans.
+If the user asks to make changes, explain what you WOULD do and ask them to switch to Execute mode.`
+      : `## EXECUTION MODE - FULL ACCESS
+You are in EXECUTION mode with full tool access. You can:
+- Clone repo (auto-creates your user branch)
 - Read, write, and delete files
-- Commit and push changes to the user's branch
+- Commit and push changes
 - Trigger deployments
 - Create pull requests
 
-Proceed with code changes as requested. Always push to the user's branch (not main).`;
+WORKFLOW:
+1. Clone repo if needed (creates user branch automatically)
+2. Read relevant files to understand context
+3. Make minimal, targeted changes
+4. Push to your branch (triggers Vercel auto-deploy)
+5. Report success
+
+Always push to your user branch (never directly to main).`;
 
     // Build comprehensive system prompt per specification
     const systemPrompt = `You are an autonomous AI coding agent for Product Compass, a collaborative product development platform. Your role is to translate natural language requests into precise code changes, deploy previews, and facilitate team approvals.
