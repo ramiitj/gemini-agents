@@ -110,6 +110,56 @@ export type Database = {
           },
         ]
       }
+      agent_sessions: {
+        Row: {
+          agent_mode: string | null
+          created_at: string | null
+          current_branch: string | null
+          github_owner: string | null
+          github_repo: string | null
+          id: string
+          project_id: string
+          staged_files: Json | null
+          updated_at: string | null
+          user_id: string
+          vercel_project_id: string | null
+        }
+        Insert: {
+          agent_mode?: string | null
+          created_at?: string | null
+          current_branch?: string | null
+          github_owner?: string | null
+          github_repo?: string | null
+          id?: string
+          project_id: string
+          staged_files?: Json | null
+          updated_at?: string | null
+          user_id: string
+          vercel_project_id?: string | null
+        }
+        Update: {
+          agent_mode?: string | null
+          created_at?: string | null
+          current_branch?: string | null
+          github_owner?: string | null
+          github_repo?: string | null
+          id?: string
+          project_id?: string
+          staged_files?: Json | null
+          updated_at?: string | null
+          user_id?: string
+          vercel_project_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       approvals: {
         Row: {
           comment: string | null

@@ -6,9 +6,12 @@ import DeploymentStatus from "./DeploymentStatus";
 import PreviewFrame from "./PreviewFrame";
 import FileList from "./FileList";
 import ElementInfoPanel from "./ElementInfoPanel";
+import BranchStatus from "./BranchStatus";
 import { useDeployment } from "@/hooks/useDeployment";
 import { useCodeChanges } from "@/hooks/useCodeChanges";
 import { useChangeRequests } from "@/hooks/useChangeRequests";
+import { useAgentSession } from "@/hooks/useAgentSession";
+import { useBranchDeployment } from "@/hooks/useBranchDeployment";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
@@ -35,6 +38,11 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
   const { deployment, status, triggerDeployment } = useDeployment(vercelProjectId);
   const { changes, approveChanges } = useCodeChanges(projectId, conversationId);
   const { createChangeRequest } = useChangeRequests(projectId);
+  const { session } = useAgentSession(projectId);
+  const { deployment: branchDeployment, loading: branchLoading } = useBranchDeployment(
+    session?.vercel_project_id || vercelProjectId,
+    session?.current_branch
+  );
   const prevVercelProjectId = useRef(vercelProjectId);
 
   // Auto-trigger deployment when Vercel project is newly set up
@@ -51,10 +59,11 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
     { id: "files", label: "Files" },
   ];
 
-  // Direct Vercel URL (vercel.json in repo handles iframe headers)
-  const rawUrl = deployment?.url 
+  // Use branch deployment URL if available, otherwise fall back to main deployment
+  const branchUrl = branchDeployment?.url;
+  const rawUrl = branchUrl || (deployment?.url 
     ? (deployment.url.startsWith('http') ? deployment.url : `https://${deployment.url}`)
-    : null;
+    : null);
   const previewUrl = rawUrl;
 
   const handleElementSelected = (element: ElementInfo) => {
@@ -275,9 +284,21 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
             {/* Preview header */}
             <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-2">
               <div className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground">
-                  {rawUrl ? rawUrl.replace("https://", "") : "No deployment yet"}
-                </span>
+                {/* Branch status - shows user's current branch if available */}
+                {session?.current_branch ? (
+                  <BranchStatus
+                    branch={session.current_branch}
+                    deployment={branchDeployment}
+                    loading={branchLoading}
+                    githubOwner={session.github_owner}
+                    githubRepo={session.github_repo}
+                  />
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    {rawUrl ? rawUrl.replace("https://", "") : "No deployment yet"}
+                  </span>
+                )}
+                
                 {/* Before/After toggle */}
                 <div className="flex rounded-md border border-border bg-background">
                   <button
