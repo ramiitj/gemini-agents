@@ -1,24 +1,24 @@
 const steps = [
   {
-    number: "01",
+    number: "1",
     title: "Connect your repo",
     description:
       "Link your GitHub repository and Vercel project. Takes less than a minute.",
   },
   {
-    number: "02",
+    number: "2",
     title: "Describe what you want",
     description:
       "Tell the AI what to build or change in plain English. Upload screenshots for context.",
   },
   {
-    number: "03",
+    number: "3",
     title: "Review the preview",
     description:
       "See a live preview of your changes. Request tweaks until it's perfect.",
   },
   {
-    number: "04",
+    number: "4",
     title: "Approve and ship",
     description:
       "One click creates the PR and deploys. Team members can review and approve.",
@@ -50,7 +50,7 @@ const HowItWorks = () => {
               
               <div className="relative flex flex-col items-center text-center lg:items-start lg:text-left">
                 {/* Step number */}
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-primary bg-background text-xl font-bold text-primary">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
                   {step.number}
                 </div>
                 

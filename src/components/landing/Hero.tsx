@@ -1,18 +1,14 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 const Hero = () => {
   return (
-    <section className="relative overflow-hidden px-6 py-24 sm:py-32 lg:px-8">
-      {/* Subtle gradient background */}
-      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-accent/30 to-transparent" />
-      
-      <div className="mx-auto max-w-3xl text-center">
-        {/* Badge */}
-        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground shadow-sm">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span>AI-powered product development</span>
-        </div>
+    <section className="relative px-6 py-24 sm:py-32 lg:px-8">
+      <div className="mx-auto max-w-2xl text-center">
+        {/* Simple text badge */}
+        <p className="mb-6 text-sm text-muted-foreground">
+          AI-powered product development
+        </p>
 
         {/* Main headline */}
         <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
