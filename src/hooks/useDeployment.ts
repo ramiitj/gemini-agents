@@ -23,6 +23,16 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
   const [status, setStatus] = useState<DeploymentStatus>("idle");
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Cleanup polling on unmount - must be before useCallback hooks
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, []);
+
   const pollStatus = useCallback(async (deploymentId: string) => {
     if (!deploymentId) return;
 
@@ -69,16 +79,6 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
     } catch (e) {
       console.error('Error in pollStatus:', e);
     }
-  }, []);
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
   }, []);
 
   const triggerDeployment = useCallback(async (ref: string = 'main') => {
