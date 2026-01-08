@@ -11,6 +11,7 @@ export interface Message {
     file: string;
     diff: string;
   }[];
+  status?: "pending" | "complete" | "error";
 }
 
 const initialMessages: Message[] = [
@@ -29,14 +30,31 @@ const initialMessages: Message[] = [
   {
     id: "3",
     role: "assistant",
-    content: "I'll create a testimonials section with 3 customer quotes. I'm adding a new Testimonials component and importing it into the home page.",
+    content: "I'll create a testimonials section with 3 customer quotes. Creating Testimonials.tsx and updating index.tsx.",
     timestamp: new Date(Date.now() - 1000 * 60 * 3),
+    status: "complete",
     codeChanges: [
       {
         file: "src/components/Testimonials.tsx",
-        diff: "+ const testimonials = [\n+   { name: \"Sarah Chen\", role: \"CEO\", quote: \"...\" },\n+   { name: \"Mike Johnson\", role: \"CTO\", quote: \"...\" },\n+   { name: \"Emily Davis\", role: \"PM\", quote: \"...\" },\n+ ];",
+        diff: `+ const testimonials = [
++   { name: "Sarah Chen", role: "CEO", quote: "..." },
++   { name: "Mike Johnson", role: "CTO", quote: "..." },
++   { name: "Emily Davis", role: "PM", quote: "..." },
++ ];`,
+      },
+      {
+        file: "src/pages/index.tsx",
+        diff: `+ import Testimonials from "@/components/Testimonials";
+  ...
++       <Testimonials />`,
       },
     ],
+  },
+  {
+    id: "4",
+    role: "system",
+    content: "Preview deployed successfully",
+    timestamp: new Date(Date.now() - 1000 * 60 * 2),
   },
 ];
 
@@ -52,8 +70,8 @@ const ChatContainer = () => {
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, newMessage]);
-    
-    // Simulate AI typing
+
+    // Simulate AI response
     setIsTyping(true);
     setTimeout(() => {
       setIsTyping(false);
@@ -62,8 +80,37 @@ const ChatContainer = () => {
         role: "assistant",
         content: "I understand. Let me make that change for you.",
         timestamp: new Date(),
+        status: "pending",
       };
       setMessages((prev) => [...prev, aiResponse]);
+
+      // Simulate completion
+      setTimeout(() => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiResponse.id ? { ...m, status: "complete" as const } : m
+          )
+        );
+
+        // Add system message for deployment
+        const deployMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          role: "system",
+          content: "Building preview...",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, deployMessage]);
+
+        setTimeout(() => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === deployMessage.id
+                ? { ...m, content: "Preview deployed successfully" }
+                : m
+            )
+          );
+        }, 2000);
+      }, 1500);
     }, 1500);
   };
 
