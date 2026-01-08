@@ -5,9 +5,10 @@ import { Textarea } from "@/components/ui/textarea";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
+  disabled?: boolean;
 }
 
-const ChatInput = ({ onSend }: ChatInputProps) => {
+const ChatInput = ({ onSend, disabled }: ChatInputProps) => {
   const [value, setValue] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -34,7 +35,12 @@ const ChatInput = ({ onSend }: ChatInputProps) => {
           placeholder="Describe what you want to build..."
           className="min-h-[80px] resize-none"
         />
-        <Button type="submit" size="icon" className="shrink-0 self-end">
+        <Button 
+          type="submit" 
+          size="icon" 
+          className="shrink-0 self-end"
+          disabled={!value.trim() || disabled}
+        >
           <Send className="h-4 w-4" />
         </Button>
       </div>
