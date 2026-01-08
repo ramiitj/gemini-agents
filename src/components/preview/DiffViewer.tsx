@@ -1,6 +1,12 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Copy, Check } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useCodeChanges, CodeChange } from "@/hooks/useCodeChanges";
+
+interface DiffViewerProps {
+  projectId?: string;
+  conversationId?: string;
+}
 
 interface DiffFile {
   filename: string;
@@ -15,84 +21,113 @@ interface DiffHunk {
 interface DiffLine {
   type: "context" | "addition" | "deletion";
   content: string;
-  lineNumber?: number;
 }
 
-const mockDiff: DiffFile[] = [
-  {
-    filename: "src/pages/index.tsx",
-    hunks: [
-      {
-        header: "@@ -1,5 +1,7 @@",
-        lines: [
-          { type: "context", content: 'import Hero from "@/components/Hero";' },
-          { type: "addition", content: 'import Testimonials from "@/components/Testimonials";' },
-          { type: "context", content: "" },
-          { type: "context", content: "export default function Home() {" },
-          { type: "context", content: "  return (" },
-          { type: "context", content: "    <main>" },
-          { type: "context", content: "      <Hero />" },
-          { type: "addition", content: "      <Testimonials />" },
-          { type: "context", content: "    </main>" },
-          { type: "context", content: "  );" },
-          { type: "context", content: "}" },
-        ],
-      },
-    ],
-  },
-  {
-    filename: "src/components/Testimonials.tsx",
-    hunks: [
-      {
-        header: "@@ -0,0 +1,35 @@",
-        lines: [
-          { type: "addition", content: "const testimonials = [" },
-          { type: "addition", content: '  { name: "Sarah Chen", role: "CEO", quote: "..." },' },
-          { type: "addition", content: '  { name: "Mike Johnson", role: "CTO", quote: "..." },' },
-          { type: "addition", content: '  { name: "Emily Davis", role: "PM", quote: "..." },' },
-          { type: "addition", content: "];" },
-          { type: "addition", content: "" },
-          { type: "addition", content: "const Testimonials = () => {" },
-          { type: "addition", content: "  return (" },
-          { type: "addition", content: '    <section className="py-16">' },
-          { type: "addition", content: "      {testimonials.map((t) => (" },
-          { type: "addition", content: "        <div key={t.name}>" },
-          { type: "addition", content: '          <p>"{t.quote}"</p>' },
-          { type: "addition", content: "          <p>{t.name}, {t.role}</p>" },
-          { type: "addition", content: "        </div>" },
-          { type: "addition", content: "      ))}" },
-          { type: "addition", content: "    </section>" },
-          { type: "addition", content: "  );" },
-          { type: "addition", content: "};" },
-          { type: "addition", content: "" },
-          { type: "addition", content: "export default Testimonials;" },
-        ],
-      },
-    ],
-  },
-];
+// Parse diff content into structured format
+function parseDiffContent(diffContent: string): DiffHunk[] {
+  if (!diffContent) return [];
+  
+  const hunks: DiffHunk[] = [];
+  const lines = diffContent.split('\n');
+  let currentHunk: DiffHunk | null = null;
+  
+  for (const line of lines) {
+    if (line.startsWith('@@')) {
+      if (currentHunk) hunks.push(currentHunk);
+      currentHunk = { header: line, lines: [] };
+    } else if (currentHunk) {
+      if (line.startsWith('+') && !line.startsWith('+++')) {
+        currentHunk.lines.push({ type: 'addition', content: line.substring(1) });
+      } else if (line.startsWith('-') && !line.startsWith('---')) {
+        currentHunk.lines.push({ type: 'deletion', content: line.substring(1) });
+      } else if (line.startsWith(' ')) {
+        currentHunk.lines.push({ type: 'context', content: line.substring(1) });
+      } else if (!line.startsWith('---') && !line.startsWith('+++')) {
+        currentHunk.lines.push({ type: 'context', content: line });
+      }
+    }
+  }
+  
+  if (currentHunk) hunks.push(currentHunk);
+  return hunks;
+}
 
-const DiffViewer = () => {
+// Convert CodeChange to DiffFile format
+function changeToDiffFile(change: CodeChange): DiffFile {
+  const hunks = change.diff_content 
+    ? parseDiffContent(change.diff_content)
+    : [];
+  
+  // If no diff content, create a simple diff from content
+  if (hunks.length === 0 && change.modified_content) {
+    const lines = change.modified_content.split('\n').map(line => ({
+      type: change.status === 'deleted' ? 'deletion' as const : 'addition' as const,
+      content: line
+    }));
+    hunks.push({
+      header: `@@ -0,0 +1,${lines.length} @@`,
+      lines
+    });
+  }
+  
+  return {
+    filename: change.file_path,
+    hunks
+  };
+}
+
+const DiffViewer = ({ projectId, conversationId }: DiffViewerProps) => {
+  const { changes, loading } = useCodeChanges(projectId, conversationId);
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  
+  if (changes.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <p className="text-sm">No changes to display</p>
+        <p className="text-xs mt-1">Changes will appear here when the AI agent modifies files</p>
+      </div>
+    );
+  }
+  
+  const diffFiles = changes.map(changeToDiffFile);
+  
   return (
     <div className="space-y-4">
-      {mockDiff.map((file) => (
-        <DiffFileBlock key={file.filename} file={file} />
+      {diffFiles.map((file, index) => (
+        <DiffFileBlock 
+          key={changes[index].id} 
+          file={file} 
+          change={changes[index]}
+        />
       ))}
     </div>
   );
 };
 
-const DiffFileBlock = ({ file }: { file: DiffFile }) => {
+const DiffFileBlock = ({ file, change }: { file: DiffFile; change: CodeChange }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    const content = file.hunks
+    const content = change.modified_content || file.hunks
       .flatMap((h) => h.lines.map((l) => l.content))
       .join("\n");
     navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const statusColors = {
+    added: "text-green-600 bg-green-500/10",
+    modified: "text-yellow-600 bg-yellow-500/10",
+    deleted: "text-red-600 bg-red-500/10"
   };
 
   return (
@@ -108,41 +143,57 @@ const DiffFileBlock = ({ file }: { file: DiffFile }) => {
           ) : (
             <ChevronRight className="h-4 w-4" />
           )}
+          <span className={`px-1.5 py-0.5 text-xs rounded ${statusColors[change.status]}`}>
+            {change.status}
+          </span>
           {file.filename}
         </button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 text-xs"
-          onClick={handleCopy}
-        >
-          {copied ? (
-            <>
-              <Check className="h-3 w-3" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="h-3 w-3" />
-              Copy
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {change.additions > 0 && <span className="text-green-600">+{change.additions}</span>}
+            {change.additions > 0 && change.deletions > 0 && " / "}
+            {change.deletions > 0 && <span className="text-red-600">-{change.deletions}</span>}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={handleCopy}
+          >
+            {copied ? (
+              <>
+                <Check className="h-3 w-3" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="h-3 w-3" />
+                Copy
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Diff content */}
       {isExpanded && (
         <div className="overflow-x-auto">
-          {file.hunks.map((hunk, i) => (
-            <div key={i}>
-              <div className="bg-muted/30 px-3 py-1 text-xs text-muted-foreground font-mono">
-                {hunk.header}
+          {file.hunks.length > 0 ? (
+            file.hunks.map((hunk, i) => (
+              <div key={i}>
+                <div className="bg-muted/30 px-3 py-1 text-xs text-muted-foreground font-mono">
+                  {hunk.header}
+                </div>
+                {hunk.lines.map((line, j) => (
+                  <DiffLineRow key={j} line={line} />
+                ))}
               </div>
-              {hunk.lines.map((line, j) => (
-                <DiffLineRow key={j} line={line} />
-              ))}
+            ))
+          ) : (
+            <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+              No diff content available
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

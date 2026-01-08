@@ -145,6 +145,108 @@ export type Database = {
           },
         ]
       }
+      change_requests: {
+        Row: {
+          commit_sha: string | null
+          conversation_id: string | null
+          created_at: string | null
+          created_by: string | null
+          deployment_id: string | null
+          description: string | null
+          github_pr_url: string | null
+          id: string
+          project_id: string
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          commit_sha?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deployment_id?: string | null
+          description?: string | null
+          github_pr_url?: string | null
+          id?: string
+          project_id: string
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          commit_sha?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deployment_id?: string | null
+          description?: string | null
+          github_pr_url?: string | null
+          id?: string
+          project_id?: string
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      code_changes: {
+        Row: {
+          additions: number | null
+          agent_run_id: string | null
+          approved_at: string | null
+          approved_by: string | null
+          commit_sha: string | null
+          conversation_id: string | null
+          created_at: string | null
+          deletions: number | null
+          diff_content: string | null
+          file_path: string
+          id: string
+          message_id: string | null
+          modified_content: string | null
+          original_content: string | null
+          project_id: string
+          status: string
+        }
+        Insert: {
+          additions?: number | null
+          agent_run_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          commit_sha?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          deletions?: number | null
+          diff_content?: string | null
+          file_path: string
+          id?: string
+          message_id?: string | null
+          modified_content?: string | null
+          original_content?: string | null
+          project_id: string
+          status?: string
+        }
+        Update: {
+          additions?: number | null
+          agent_run_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          commit_sha?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          deletions?: number | null
+          diff_content?: string | null
+          file_path?: string
+          id?: string
+          message_id?: string | null
+          modified_content?: string | null
+          original_content?: string | null
+          project_id?: string
+          status?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           created_at: string | null
@@ -425,6 +527,60 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_comments: {
+        Row: {
+          change_request_id: string
+          content: string
+          created_at: string | null
+          file_path: string | null
+          id: string
+          line_number: number | null
+          parent_id: string | null
+          quoted_text: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          change_request_id: string
+          content: string
+          created_at?: string | null
+          file_path?: string | null
+          id?: string
+          line_number?: number | null
+          parent_id?: string | null
+          quoted_text?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          change_request_id?: string
+          content?: string
+          created_at?: string | null
+          file_path?: string | null
+          id?: string
+          line_number?: number | null
+          parent_id?: string | null
+          quoted_text?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_comments_change_request_id_fkey"
+            columns: ["change_request_id"]
+            isOneToOne: false
+            referencedRelation: "change_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "team_comments"
             referencedColumns: ["id"]
           },
         ]
