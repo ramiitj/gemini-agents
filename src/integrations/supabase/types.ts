@@ -59,6 +59,57 @@ export type Database = {
           },
         ]
       }
+      agent_runs: {
+        Row: {
+          conversation_id: string | null
+          created_at: string | null
+          current_step: string | null
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          project_id: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string | null
+          current_step?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          project_id?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string | null
+          current_step?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          project_id?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       approvals: {
         Row: {
           comment: string | null
@@ -167,6 +218,35 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      github_connections: {
+        Row: {
+          connected_at: string | null
+          github_username: string | null
+          id: string
+          organization_id: string | null
+        }
+        Insert: {
+          connected_at?: string | null
+          github_username?: string | null
+          id?: string
+          organization_id?: string | null
+        }
+        Update: {
+          connected_at?: string | null
+          github_username?: string | null
+          id?: string
+          organization_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "github_connections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -325,6 +405,35 @@ export type Database = {
             foreignKeyName: "user_roles_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vercel_connections: {
+        Row: {
+          connected_at: string | null
+          id: string
+          organization_id: string | null
+          vercel_team_id: string | null
+        }
+        Insert: {
+          connected_at?: string | null
+          id?: string
+          organization_id?: string | null
+          vercel_team_id?: string | null
+        }
+        Update: {
+          connected_at?: string | null
+          id?: string
+          organization_id?: string | null
+          vercel_team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vercel_connections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },

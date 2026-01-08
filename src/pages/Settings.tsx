@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import InviteMemberModal from "@/components/team/InviteMemberModal";
+import GitHubConnection from "@/components/settings/GitHubConnection";
+import VercelConnection from "@/components/settings/VercelConnection";
 import { UserPlus, Trash2, Settings2, Users, Link } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -316,40 +318,10 @@ const Settings = () => {
               </TabsContent>
 
               <TabsContent value="integrations">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Integrations</CardTitle>
-                    <CardDescription>
-                      Connect external services to your workspace
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                        <div>
-                          <p className="font-medium">GitHub</p>
-                          <p className="text-sm text-muted-foreground">
-                            Connect your GitHub repositories
-                          </p>
-                        </div>
-                        <Button variant="outline" disabled>
-                          Coming soon
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                        <div>
-                          <p className="font-medium">Vercel</p>
-                          <p className="text-sm text-muted-foreground">
-                            Deploy to Vercel automatically
-                          </p>
-                        </div>
-                        <Button variant="outline" disabled>
-                          Coming soon
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <div className="space-y-4">
+                  <GitHubConnection organizationId={organization.id} />
+                  <VercelConnection organizationId={organization.id} />
+                </div>
               </TabsContent>
             </Tabs>
           </div>
