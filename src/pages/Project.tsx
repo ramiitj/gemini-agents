@@ -1,14 +1,15 @@
 import { useParams, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import AppSidebar from "@/components/layout/AppSidebar";
-import ChatContainer from "@/components/chat/ChatContainer";
+import ChatContainer, { VisualContext } from "@/components/chat/ChatContainer";
 import PreviewPanel from "@/components/preview/PreviewPanel";
 import TeamSidebar from "@/components/team/TeamSidebar";
 import NotificationDropdown from "@/components/notifications/NotificationDropdown";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useOrganization } from "@/hooks/useOrganization";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { ElementInfo } from "@/lib/visual-edit-injector";
 
 interface ProjectData {
   id: string;
@@ -30,6 +31,7 @@ const Project = () => {
   const { organization } = useOrganization();
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [visualContext, setVisualContext] = useState<VisualContext | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -49,6 +51,14 @@ const Project = () => {
 
     fetchProject();
   }, [id]);
+
+  const handleSendToAI = useCallback((element: ElementInfo, request: string) => {
+    setVisualContext({ element, request });
+  }, []);
+
+  const handleVisualContextHandled = useCallback(() => {
+    setVisualContext(null);
+  }, []);
 
   if (loading) {
     return (
@@ -97,13 +107,19 @@ const Project = () => {
 
           <div className="flex flex-1 overflow-hidden">
             <div className="flex w-1/2 flex-col border-r border-border">
-              <ChatContainer projectId={project.id} githubRepo={project.github_repo} />
+              <ChatContainer 
+                projectId={project.id} 
+                githubRepo={project.github_repo}
+                visualContext={visualContext}
+                onVisualContextHandled={handleVisualContextHandled}
+              />
             </div>
             <div className="flex w-1/2 flex-col">
               <PreviewPanel 
                 projectId={project.id}
                 vercelProjectId={project.vercel_project_id}
                 githubRepo={project.github_repo}
+                onSendToAI={handleSendToAI}
               />
             </div>
             <TeamSidebar organizationId={organization?.id || null} />

@@ -44,6 +44,42 @@ const toolDefinitions = [
     }
   },
   {
+    name: 'file_delete',
+    description: 'Delete a file from the repository. Requires explicit confirmation.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        file_path: { type: 'STRING', description: 'Path to file to delete' },
+        confirm: { type: 'BOOLEAN', description: 'Must be true to confirm deletion' }
+      },
+      required: ['file_path', 'confirm']
+    }
+  },
+  {
+    name: 'list_directory',
+    description: 'List all files and folders in a directory of the cloned repository. Use to explore project structure.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: { type: 'STRING', description: 'Directory path relative to repo root (use "." for root)' },
+        recursive: { type: 'BOOLEAN', description: 'List all files recursively (default: false)' }
+      },
+      required: ['path']
+    }
+  },
+  {
+    name: 'search_code',
+    description: 'Search for text patterns or code snippets across the repository. Use to find where specific functionality is implemented.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: { type: 'STRING', description: 'Search query (supports GitHub code search syntax)' },
+        file_extension: { type: 'STRING', description: 'Filter by file extension (e.g., "tsx", "ts")' }
+      },
+      required: ['query']
+    }
+  },
+  {
     name: 'generate_diff',
     description: 'Generate a human-readable diff of changes made to files',
     parameters: {
@@ -71,6 +107,19 @@ const toolDefinitions = [
     }
   },
   {
+    name: 'vercel_create_project',
+    description: 'Create a new Vercel project linked to a GitHub repository. Use this after cloning a repo to set up automatic deployments.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        name: { type: 'STRING', description: 'Project name (will be slugified)' },
+        repo: { type: 'STRING', description: 'GitHub repository in owner/repo format or full URL' },
+        framework: { type: 'STRING', description: 'Framework (vite, nextjs, react). Default: vite' }
+      },
+      required: ['name', 'repo']
+    }
+  },
+  {
     name: 'vercel_trigger_deployment',
     description: 'Trigger a new Vercel deployment for a project',
     parameters: {
@@ -91,6 +140,49 @@ const toolDefinitions = [
         deployment_id: { type: 'STRING', description: 'Vercel deployment ID' }
       },
       required: ['deployment_id']
+    }
+  },
+  {
+    name: 'get_build_logs',
+    description: 'Retrieve detailed build logs from a Vercel deployment. Use to diagnose build failures.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        deployment_id: { type: 'STRING', description: 'Vercel deployment ID' },
+        log_type: { type: 'STRING', description: 'Type of logs: "build" or "runtime" (default: build)' }
+      },
+      required: ['deployment_id']
+    }
+  },
+  {
+    name: 'capture_screenshot',
+    description: 'Capture a screenshot of a deployed website for visual inspection. Use to verify UI changes or analyze design issues.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        url: { type: 'STRING', description: 'Full URL of the page to screenshot' },
+        viewport_width: { type: 'NUMBER', description: 'Viewport width in pixels (default: 1280)' },
+        viewport_height: { type: 'NUMBER', description: 'Viewport height in pixels (default: 720)' },
+        full_page: { type: 'BOOLEAN', description: 'Capture full scrollable page (default: false)' },
+        selector: { type: 'STRING', description: 'CSS selector to screenshot specific element' }
+      },
+      required: ['url']
+    }
+  },
+  {
+    name: 'analyze_visual_element',
+    description: 'Analyze a visually selected element from the preview. Use to understand element context and suggest targeted code changes based on user selection.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        selector: { type: 'STRING', description: 'CSS selector of the element' },
+        element_html: { type: 'STRING', description: 'Outer HTML of the element' },
+        computed_styles: { type: 'STRING', description: 'JSON of computed styles (color, font, spacing, etc.)' },
+        bounding_box: { type: 'STRING', description: 'JSON with x, y, width, height of element' },
+        user_request: { type: 'STRING', description: 'What the user wants to change about this element' },
+        text_content: { type: 'STRING', description: 'Text content of the element' }
+      },
+      required: ['selector', 'user_request']
     }
   },
   {
@@ -239,6 +331,7 @@ interface ToolContext {
   stagedFiles: Record<string, { original: string; modified: string }>;
   currentRepo?: { owner: string; repo: string; branch: string };
   lastDeploymentId?: string;
+  lastVercelProjectId?: string;
 }
 
 // Execute a tool call
@@ -269,7 +362,7 @@ async function executeTool(
       }
       
       const [, owner, repo] = match;
-      context.currentRepo = { owner, repo, branch };
+      context.currentRepo = { owner, repo: repo.replace('.git', ''), branch };
       
       // Get file tree
       const response = await fetch(
@@ -345,6 +438,118 @@ async function executeTool(
       };
     }
 
+    case 'file_delete': {
+      const { file_path, confirm } = args;
+      
+      if (!confirm) {
+        return { result: { error: 'Deletion not confirmed. Set confirm: true to proceed.' }, context };
+      }
+      
+      // Mark file for deletion with special marker
+      context.stagedFiles[file_path] = { 
+        original: context.stagedFiles[file_path]?.original || '', 
+        modified: '__DELETE__' 
+      };
+      
+      return { result: { deleted: true, path: file_path }, context };
+    }
+
+    case 'list_directory': {
+      const { path = '.', recursive = false } = args;
+      
+      if (!context.currentRepo) {
+        return { result: { error: 'No repository cloned. Use github_clone_repo first.' }, context };
+      }
+      
+      const { owner, repo, branch } = context.currentRepo;
+      
+      if (recursive) {
+        // Use tree API for recursive listing
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
+          { headers: githubHeaders }
+        );
+        const data = await response.json();
+        
+        if (data.message) {
+          return { result: { error: data.message }, context };
+        }
+        
+        const prefix = path === '.' ? '' : `${path}/`;
+        const items = data.tree
+          ?.filter((item: any) => item.path.startsWith(prefix))
+          .map((item: any) => ({
+            name: item.path.replace(prefix, '').split('/')[0],
+            type: item.type === 'blob' ? 'file' : 'dir',
+            path: item.path,
+            size: item.size
+          })) || [];
+        
+        // Deduplicate directories
+        const seen = new Set();
+        const uniqueItems = items.filter((item: any) => {
+          const key = item.path;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        
+        return { result: { path, items: uniqueItems.slice(0, 100), count: uniqueItems.length }, context };
+      }
+      
+      const response = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${path === '.' ? '' : path}?ref=${branch}`,
+        { headers: githubHeaders }
+      );
+      const data = await response.json();
+      
+      if (data.message) {
+        return { result: { error: data.message }, context };
+      }
+      
+      const items = Array.isArray(data) ? data.map((item: any) => ({
+        name: item.name,
+        type: item.type === 'file' ? 'file' : 'dir',
+        path: item.path,
+        size: item.size
+      })) : [{ name: data.name, type: data.type, path: data.path }];
+      
+      return { result: { path, items, count: items.length }, context };
+    }
+
+    case 'search_code': {
+      const { query, file_extension } = args;
+      
+      if (!context.currentRepo) {
+        return { result: { error: 'No repository cloned. Use github_clone_repo first.' }, context };
+      }
+      
+      const { owner, repo } = context.currentRepo;
+      
+      let searchQuery = `${query} repo:${owner}/${repo}`;
+      if (file_extension) {
+        searchQuery += ` extension:${file_extension}`;
+      }
+      
+      const response = await fetch(
+        `https://api.github.com/search/code?q=${encodeURIComponent(searchQuery)}`,
+        { headers: githubHeaders }
+      );
+      const data = await response.json();
+      
+      if (data.message) {
+        return { result: { error: data.message }, context };
+      }
+      
+      const results = (data.items || []).slice(0, 15).map((item: any) => ({
+        file: item.path,
+        url: item.html_url,
+        repository: item.repository?.full_name
+      }));
+      
+      return { result: { query, results, total: data.total_count }, context };
+    }
+
     case 'generate_diff': {
       const { file_paths } = args;
       const diffs: string[] = [];
@@ -353,14 +558,19 @@ async function executeTool(
       
       for (const path of file_paths) {
         const file = context.stagedFiles[path];
-        if (file && file.original !== file.modified) {
-          const diff = generateUnifiedDiff(path, file.original, file.modified);
-          diffs.push(diff);
-          
-          // Count changes
-          const diffLines = diff.split('\n');
-          additions += diffLines.filter(l => l.startsWith('+')).length;
-          deletions += diffLines.filter(l => l.startsWith('-')).length;
+        if (file) {
+          if (file.modified === '__DELETE__') {
+            diffs.push(`--- a/${path}\n+++ /dev/null\n(file deleted)`);
+            deletions += file.original.split('\n').length;
+          } else if (file.original !== file.modified) {
+            const diff = generateUnifiedDiff(path, file.original, file.modified);
+            diffs.push(diff);
+            
+            // Count changes
+            const diffLines = diff.split('\n');
+            additions += diffLines.filter(l => l.startsWith('+')).length;
+            deletions += diffLines.filter(l => l.startsWith('-')).length;
+          }
         }
       }
       
@@ -408,7 +618,15 @@ async function executeTool(
       // Create blobs for each modified file
       const treeItems = [];
       for (const [path, file] of Object.entries(context.stagedFiles)) {
-        if (file.original !== file.modified) {
+        if (file.modified === '__DELETE__') {
+          // For deletions, we don't add to the tree (file will be removed)
+          treeItems.push({
+            path,
+            mode: '100644',
+            type: 'blob',
+            sha: null // null sha means delete
+          });
+        } else if (file.original !== file.modified) {
           const blobResponse = await fetch(
             `https://api.github.com/repos/${owner}/${repo}/git/blobs`,
             {
@@ -500,6 +718,51 @@ async function executeTool(
       };
     }
 
+    case 'vercel_create_project': {
+      const { name, repo, framework = 'vite' } = args;
+      
+      // Parse repo if it's a full URL
+      let repoPath = repo;
+      const match = repo.match(/github\.com[\/:]([^\/]+)\/([^\/\.]+)/);
+      if (match) {
+        repoPath = `${match[1]}/${match[2].replace('.git', '')}`;
+      }
+      
+      const projectName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
+      
+      const response = await fetch('https://api.vercel.com/v9/projects', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${vercelToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: projectName,
+          framework,
+          gitRepository: { type: 'github', repo: repoPath }
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        return { result: { error: data.error.message || data.error }, context };
+      }
+      
+      context.lastVercelProjectId = data.id;
+      
+      return {
+        result: {
+          success: true,
+          projectId: data.id,
+          name: data.name,
+          framework: data.framework,
+          accountId: data.accountId
+        },
+        context
+      };
+    }
+
     case 'vercel_trigger_deployment': {
       const { project_id, branch } = args;
       
@@ -576,6 +839,121 @@ async function executeTool(
       };
     }
 
+    case 'get_build_logs': {
+      const { deployment_id, log_type = 'build' } = args;
+      
+      const response = await fetch(
+        `https://api.vercel.com/v2/deployments/${deployment_id}/events`,
+        { headers: { 'Authorization': `Bearer ${vercelToken}` } }
+      );
+      
+      if (!response.ok) {
+        return { result: { error: `Failed to fetch logs: ${response.status}` }, context };
+      }
+      
+      const events = await response.json();
+      
+      const logs = events
+        .filter((e: any) => log_type === 'build' ? e.type === 'stdout' || e.type === 'stderr' : e.type === 'runtime')
+        .slice(-100)
+        .map((e: any) => e.text || e.payload?.text)
+        .filter(Boolean)
+        .join('\n');
+      
+      return { result: { deployment_id, log_type, logs, eventCount: events.length }, context };
+    }
+
+    case 'capture_screenshot': {
+      const { 
+        url, 
+        viewport_width = 1280, 
+        viewport_height = 720, 
+        full_page = false,
+        selector
+      } = args;
+      
+      const screenshotApiKey = Deno.env.get('SCREENSHOTONE_API_KEY');
+      
+      if (!screenshotApiKey) {
+        // Return a helpful message if API key not configured
+        return { 
+          result: { 
+            error: 'SCREENSHOTONE_API_KEY not configured. To enable visual screenshots, add this secret.',
+            url,
+            suggestion: 'You can still analyze the deployment by visiting the URL directly or using analyze_visual_element when the user selects an element.'
+          }, 
+          context 
+        };
+      }
+      
+      const params = new URLSearchParams({
+        access_key: screenshotApiKey,
+        url: url,
+        viewport_width: viewport_width.toString(),
+        viewport_height: viewport_height.toString(),
+        full_page: full_page.toString(),
+        format: 'jpg',
+        response_type: 'json'
+      });
+      
+      if (selector) {
+        params.set('selector', selector);
+      }
+      
+      const response = await fetch(`https://api.screenshotone.com/take?${params}`);
+      const data = await response.json();
+      
+      return {
+        result: {
+          screenshot_url: data.screenshot_url || data.url,
+          width: viewport_width,
+          height: viewport_height,
+          captured_at: new Date().toISOString()
+        },
+        context
+      };
+    }
+
+    case 'analyze_visual_element': {
+      const { selector, element_html, computed_styles, bounding_box, user_request, text_content } = args;
+      
+      // Parse styles if provided as string
+      let styles = {};
+      try {
+        styles = computed_styles ? JSON.parse(computed_styles) : {};
+      } catch (e) {
+        styles = { raw: computed_styles };
+      }
+      
+      // Parse bounding box if provided
+      let box = {};
+      try {
+        box = bounding_box ? JSON.parse(bounding_box) : {};
+      } catch (e) {
+        box = { raw: bounding_box };
+      }
+      
+      // Build analysis context
+      const analysis = {
+        selector,
+        element_summary: {
+          html_preview: element_html?.substring(0, 500),
+          text_content: text_content?.substring(0, 200),
+          styles,
+          dimensions: box
+        },
+        user_request,
+        recommendations: [
+          'Use search_code to find the component file containing this element',
+          'Look for the CSS selector or className in the codebase',
+          'After finding the file, use file_read to get full context',
+          'Make minimal changes to address the user request'
+        ]
+      };
+      
+      return { result: analysis, context };
+    }
+
     case 'github_create_pull_request': {
       const { repo_url, head_branch, base_branch, title, body = '' } = args;
       
@@ -628,9 +1006,9 @@ serve(async (req) => {
   }
 
   try {
-    const { message, conversationId, projectId, history = [], githubRepo } = await req.json();
+    const { message, conversationId, projectId, history = [], githubRepo, visualContext } = await req.json();
     
-    console.log('AI Agent received request:', { message, conversationId, projectId, githubRepo });
+    console.log('AI Agent received request:', { message, conversationId, projectId, githubRepo, hasVisualContext: !!visualContext });
     
     // Parse service account
     const serviceAccountJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON');
@@ -671,15 +1049,40 @@ For each user request:
 8. Report preview URL when ready
 9. On approval, create GitHub Pull Request
 
-## Tool Usage
+## Available Tools (15 total)
 
-You have access to 8 tools. Use them in the appropriate sequence:
-- Start with github_clone_repo for fresh context
-- Use file_read before file_write to understand existing code
-- Always generate_diff before committing to show the user
-- After pushing, immediately vercel_trigger_deployment
-- Poll vercel_get_deployment_status every 10 seconds until complete
-- Only call github_create_pull_request when user explicitly approves
+### Repository Tools
+- github_clone_repo - Clone repository for fresh context
+- file_read - Read file contents (always do this before writing)
+- file_write - Create or modify files
+- file_delete - Remove files (requires confirmation)
+- list_directory - Browse directory structure
+- search_code - Find code patterns across the repo
+- generate_diff - Preview changes before committing
+- git_add_commit_push - Commit and push changes
+
+### Vercel Tools
+- vercel_create_project - Create new Vercel project from GitHub repo
+- vercel_trigger_deployment - Deploy the project
+- vercel_get_deployment_status - Check deployment progress
+- get_build_logs - Analyze build failures in detail
+
+### Visual Inspection Tools
+- capture_screenshot - Take screenshots of deployed sites
+- analyze_visual_element - Process user-selected elements from the preview
+
+### GitHub Integration
+- github_create_pull_request - Create PR for review
+
+## Visual Editing Workflow
+
+When the user sends a message with visual element context (they selected an element in the preview):
+1. Parse the element info (selector, styles, HTML) from the context
+2. Use search_code to find the component file containing this element
+3. Use file_read to get the full component code
+4. Identify the specific JSX that renders this element
+5. Make targeted changes based on user request
+6. Show diff and deploy for visual verification
 
 ## Safety Rules
 
@@ -691,16 +1094,35 @@ You have access to 8 tools. Use them in the appropriate sequence:
 ## Current Context
 - GitHub Repository: ${githubRepo || 'Not connected'}
 - Project ID: ${projectId}
-- Conversation ID: ${conversationId}`;
+- Conversation ID: ${conversationId}
+${visualContext ? `
+## Visual Element Context (User selected this element)
+- Selector: ${visualContext.selector}
+- Text Content: ${visualContext.textContent || 'N/A'}
+- Current Styles: ${JSON.stringify(visualContext.computedStyles || {})}
+` : ''}`;
+
+    // Build the initial user message, incorporating visual context if present
+    let userMessage = message;
+    if (visualContext) {
+      userMessage = `[Visual Element Selected]
+Selector: ${visualContext.selector}
+Tag: ${visualContext.tagName}
+Classes: ${visualContext.className}
+Text: ${visualContext.textContent?.substring(0, 100) || 'N/A'}
+Styles: ${JSON.stringify(visualContext.computedStyles || {}, null, 2)}
+
+User Request: ${message}`;
+    }
 
     const messages: any[] = [
       { role: 'user', parts: [{ text: systemPrompt }] },
-      { role: 'model', parts: [{ text: 'I understand. I am ready to help you with code changes following the specified workflow and safety rules.' }] },
+      { role: 'model', parts: [{ text: 'I understand. I am ready to help you with code changes following the specified workflow and safety rules. I have access to 15 tools including visual inspection and Vercel project creation capabilities.' }] },
       ...history.map((m: any) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }]
       })),
-      { role: 'user', parts: [{ text: message }] }
+      { role: 'user', parts: [{ text: userMessage }] }
     ];
 
     // Context for tool execution
