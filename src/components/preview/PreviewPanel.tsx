@@ -44,8 +44,15 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
     { id: "files", label: "Files" },
   ];
 
-  const previewUrl = deployment?.url 
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+  const rawUrl = deployment?.url 
     ? (deployment.url.startsWith('http') ? deployment.url : `https://${deployment.url}`)
+    : null;
+
+  // Use proxy URL for iframe embedding to bypass X-Frame-Options
+  const previewUrl = rawUrl 
+    ? `${SUPABASE_URL}/functions/v1/vercel-proxy?url=${encodeURIComponent(rawUrl)}`
     : null;
 
   const handleElementSelected = (element: ElementInfo) => {
@@ -207,7 +214,7 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
             <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-2">
               <div className="flex items-center gap-3">
                 <span className="text-xs text-muted-foreground">
-                  {previewUrl ? previewUrl.replace("https://", "") : "No deployment yet"}
+                  {rawUrl ? rawUrl.replace("https://", "") : "No deployment yet"}
                 </span>
                 {/* Before/After toggle */}
                 <div className="flex rounded-md border border-border bg-background">
@@ -235,7 +242,7 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
               </div>
               <div className="flex items-center gap-2">
                 {/* Visual Edit Toggle */}
-                {previewUrl && (
+                {rawUrl && (
                   <Button
                     variant={visualEditMode ? "default" : "outline"}
                     size="sm"
@@ -256,14 +263,14 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
                     Deploy
                   </Button>
                 )}
-                {previewUrl && (
+                {rawUrl && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-7 gap-1.5 text-xs"
                     asChild
                   >
-                    <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                    <a href={rawUrl} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-3 w-3" />
                       Open
                     </a>
