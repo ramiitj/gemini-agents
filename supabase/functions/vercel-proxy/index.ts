@@ -23,34 +23,32 @@ serve(async (req) => {
 
     console.log('Proxying request to:', targetUrl);
 
+    const targetOrigin = new URL(targetUrl).origin;
+
     // Fetch the content from Vercel
     const response = await fetch(targetUrl, {
       headers: {
         'User-Agent': req.headers.get('User-Agent') || 'Mozilla/5.0',
-        'Accept': req.headers.get('Accept') || '*/*',
+        'Accept': req.headers.get('Accept') || 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': req.headers.get('Accept-Language') || 'en-US,en;q=0.9',
       },
     });
 
-    // Get the response body
-    const body = await response.arrayBuffer();
-
+    const contentType = response.headers.get('content-type') || 'text/html';
+    
     // Create new headers, stripping X-Frame-Options
     const newHeaders = new Headers();
     response.headers.forEach((value, key) => {
       const lowerKey = key.toLowerCase();
-      // Skip headers that prevent iframe embedding
       if (lowerKey === 'x-frame-options') {
         console.log('Stripped X-Frame-Options header');
         return;
       }
       if (lowerKey === 'content-security-policy') {
-        // Remove frame-ancestors directive
         const csp = value.replace(/frame-ancestors[^;]*(;|$)/gi, '');
         if (csp.trim()) {
           newHeaders.set(key, csp);
         }
-        console.log('Modified Content-Security-Policy header');
         return;
       }
       newHeaders.set(key, value);
@@ -61,6 +59,32 @@ serve(async (req) => {
       newHeaders.set(key, value);
     });
 
+    // For HTML responses, inject a <base> tag to fix relative URLs
+    if (contentType.includes('text/html')) {
+      let html = await response.text();
+      
+      // Inject <base> tag right after <head> to make all relative URLs resolve to Vercel
+      const baseTag = `<base href="${targetOrigin}/">`;
+      
+      if (html.includes('<head>')) {
+        html = html.replace('<head>', `<head>\n${baseTag}`);
+      } else if (html.includes('<HEAD>')) {
+        html = html.replace('<HEAD>', `<HEAD>\n${baseTag}`);
+      } else {
+        // Fallback: prepend to document
+        html = baseTag + html;
+      }
+
+      console.log('Injected base tag with origin:', targetOrigin);
+
+      return new Response(html, {
+        status: response.status,
+        headers: newHeaders,
+      });
+    }
+
+    // For non-HTML responses, pass through as-is
+    const body = await response.arrayBuffer();
     return new Response(body, {
       status: response.status,
       headers: newHeaders,
