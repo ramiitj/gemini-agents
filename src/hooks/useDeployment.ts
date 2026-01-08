@@ -48,7 +48,8 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
 
       console.log('Deployment status:', data);
 
-      if (data.readyState === 'ready' || data.status === 'READY') {
+      // Use readyState which is the normalized status from vercel-status function
+      if (data.readyState === 'ready') {
         setStatus("deployed");
         setDeployment(prev => prev ? {
           ...prev,
@@ -61,12 +62,12 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
           clearInterval(pollingRef.current);
           pollingRef.current = null;
         }
-      } else if (data.readyState === 'error' || data.status === 'ERROR' || data.status === 'CANCELED') {
+      } else if (data.readyState === 'error') {
         setStatus("failed");
         setDeployment(prev => prev ? {
           ...prev,
           status: "failed",
-          error: data.errorMessage || data.error || 'Deployment failed'
+          error: data.errorMessage || 'Deployment failed'
         } : null);
         
         // Stop polling
@@ -75,7 +76,7 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
           pollingRef.current = null;
         }
       }
-      // If still building, continue polling
+      // If readyState === 'building', continue polling
     } catch (e) {
       console.error('Error in pollStatus:', e);
     }

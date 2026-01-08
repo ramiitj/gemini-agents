@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings, MousePointer, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DiffViewer from "./DiffViewer";
@@ -18,15 +18,25 @@ interface PreviewPanelProps {
   vercelProjectId: string | null;
   githubRepo: string | null;
   onSendToAI?: (element: ElementInfo, request: string) => void;
+  onVercelSetup?: (vercelProjectId: string) => void;
 }
 
-const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI }: PreviewPanelProps) => {
+const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVercelSetup }: PreviewPanelProps) => {
   const [activeTab, setActiveTab] = useState<Tab>("preview");
   const [showBefore, setShowBefore] = useState(false);
   const [visualEditMode, setVisualEditMode] = useState(false);
   const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
   const [isSettingUpVercel, setIsSettingUpVercel] = useState(false);
   const { deployment, status, triggerDeployment } = useDeployment(vercelProjectId);
+  const prevVercelProjectId = useRef(vercelProjectId);
+
+  // Auto-trigger deployment when Vercel project is newly set up
+  useEffect(() => {
+    if (vercelProjectId && !prevVercelProjectId.current) {
+      triggerDeployment();
+    }
+    prevVercelProjectId.current = vercelProjectId;
+  }, [vercelProjectId, triggerDeployment]);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "preview", label: "Preview" },
@@ -88,9 +98,12 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI }: Pr
           body: { projectId, vercelProjectId: data.projectId }
         });
         
-        toast.success('Vercel project created! Refresh to deploy.');
-        // Reload to get new vercelProjectId
-        window.location.reload();
+        toast.success('Vercel project created! Starting deployment...');
+        
+        // Call callback to update parent state instead of reloading
+        if (onVercelSetup) {
+          onVercelSetup(data.projectId);
+        }
       } else if (data?.error) {
         throw new Error(data.error);
       }

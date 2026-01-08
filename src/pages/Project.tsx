@@ -60,6 +60,10 @@ const Project = () => {
     setVisualContext(null);
   }, []);
 
+  const handleVercelSetup = useCallback((newVercelProjectId: string) => {
+    setProject(prev => prev ? { ...prev, vercel_project_id: newVercelProjectId } : null);
+  }, []);
+
   if (loading) {
     return (
       <SidebarProvider>
@@ -120,6 +124,7 @@ const Project = () => {
                 vercelProjectId={project.vercel_project_id}
                 githubRepo={project.github_repo}
                 onSendToAI={handleSendToAI}
+                onVercelSetup={handleVercelSetup}
               />
             </div>
             <TeamSidebar organizationId={organization?.id || null} />
