@@ -5,6 +5,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Headers to skip from upstream (we control these ourselves)
+const skipHeaders = new Set([
+  'content-type',
+  'content-length',
+  'content-encoding',
+  'transfer-encoding',
+  'connection',
+  'x-frame-options',
+  'content-security-policy',
+  'x-content-type-options',
+]);
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -34,36 +46,25 @@ serve(async (req) => {
       },
     });
 
-    const contentType = response.headers.get('content-type') || 'text/html';
+    const upstreamContentType = response.headers.get('content-type') || 'text/html';
     
-    // Create new headers, stripping X-Frame-Options
-    const newHeaders = new Headers();
+    // Build response headers as a plain object (not Headers instance)
+    const responseHeaders: Record<string, string> = {
+      ...corsHeaders,
+    };
+
+    // Copy safe headers from upstream
     response.headers.forEach((value, key) => {
-      const lowerKey = key.toLowerCase();
-      if (lowerKey === 'x-frame-options') {
-        console.log('Stripped X-Frame-Options header');
-        return;
+      if (!skipHeaders.has(key.toLowerCase())) {
+        responseHeaders[key] = value;
       }
-      if (lowerKey === 'content-security-policy') {
-        const csp = value.replace(/frame-ancestors[^;]*(;|$)/gi, '');
-        if (csp.trim()) {
-          newHeaders.set(key, csp);
-        }
-        return;
-      }
-      newHeaders.set(key, value);
     });
 
-    // Add CORS headers
-    Object.entries(corsHeaders).forEach(([key, value]) => {
-      newHeaders.set(key, value);
-    });
-
-    // For HTML responses, inject a <base> tag to fix relative URLs
-    if (contentType.includes('text/html')) {
+    // For HTML responses, inject <base> tag and set proper Content-Type
+    if (upstreamContentType.includes('text/html')) {
       let html = await response.text();
       
-      // Inject <base> tag right after <head> to make all relative URLs resolve to Vercel
+      // Inject <base> tag right after <head>
       const baseTag = `<base href="${targetOrigin}/">`;
       
       if (html.includes('<head>')) {
@@ -71,26 +72,28 @@ serve(async (req) => {
       } else if (html.includes('<HEAD>')) {
         html = html.replace('<HEAD>', `<HEAD>\n${baseTag}`);
       } else {
-        // Fallback: prepend to document
         html = baseTag + html;
       }
 
       console.log('Injected base tag with origin:', targetOrigin);
+      console.log('Returning HTML with Content-Type: text/html; charset=utf-8');
 
-      // EXPLICITLY set Content-Type to text/html - ensures browser renders as HTML
-      newHeaders.set('Content-Type', 'text/html; charset=utf-8');
+      // CRITICAL: Set Content-Type explicitly for HTML
+      responseHeaders['Content-Type'] = 'text/html; charset=utf-8';
 
       return new Response(html, {
         status: response.status,
-        headers: newHeaders,
+        headers: responseHeaders,
       });
     }
 
-    // For non-HTML responses, pass through as-is
+    // For non-HTML responses, preserve original content-type
+    responseHeaders['Content-Type'] = upstreamContentType;
+    
     const body = await response.arrayBuffer();
     return new Response(body, {
       status: response.status,
-      headers: newHeaders,
+      headers: responseHeaders,
     });
 
   } catch (error: any) {
