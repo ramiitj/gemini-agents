@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeploymentStatus = "idle" | "building" | "deployed" | "failed";
@@ -38,7 +38,7 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
 
       console.log('Deployment status:', data);
 
-      if (data.readyState === 'READY' || data.status === 'ready') {
+      if (data.readyState === 'ready' || data.status === 'READY') {
         setStatus("deployed");
         setDeployment(prev => prev ? {
           ...prev,
@@ -51,12 +51,12 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
           clearInterval(pollingRef.current);
           pollingRef.current = null;
         }
-      } else if (data.readyState === 'ERROR' || data.status === 'error') {
+      } else if (data.readyState === 'error' || data.status === 'ERROR' || data.status === 'CANCELED') {
         setStatus("failed");
         setDeployment(prev => prev ? {
           ...prev,
           status: "failed",
-          error: data.error || 'Deployment failed'
+          error: data.errorMessage || data.error || 'Deployment failed'
         } : null);
         
         // Stop polling
@@ -69,6 +69,16 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
     } catch (e) {
       console.error('Error in pollStatus:', e);
     }
+  }, []);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
   }, []);
 
   const triggerDeployment = useCallback(async (ref: string = 'main') => {
