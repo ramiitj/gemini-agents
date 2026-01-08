@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Compass } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Header = () => {
   return (
@@ -7,10 +8,8 @@ const Header = () => {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         {/* Logo */}
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Compass className="h-5 w-5" />
-          </div>
-          <span className="text-lg font-semibold text-foreground">
+          <Compass className="h-5 w-5 text-foreground" />
+          <span className="text-base font-medium text-foreground">
             Product Compass
           </span>
         </div>
@@ -39,10 +38,14 @@ const Header = () => {
 
         {/* Auth buttons */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm">
-            Sign in
-          </Button>
-          <Button size="sm">Get started</Button>
+          <Link to="/auth">
+            <Button variant="ghost" size="sm">
+              Sign in
+            </Button>
+          </Link>
+          <Link to="/auth">
+            <Button size="sm">Get started</Button>
+          </Link>
         </div>
       </div>
     </header>
