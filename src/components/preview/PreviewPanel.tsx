@@ -44,16 +44,11 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
     { id: "files", label: "Files" },
   ];
 
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-
+  // Direct Vercel URL (vercel.json in repo handles iframe headers)
   const rawUrl = deployment?.url 
     ? (deployment.url.startsWith('http') ? deployment.url : `https://${deployment.url}`)
     : null;
-
-  // Use proxy URL for iframe embedding to bypass X-Frame-Options
-  const previewUrl = rawUrl 
-    ? `${SUPABASE_URL}/functions/v1/vercel-proxy?url=${encodeURIComponent(rawUrl)}`
-    : null;
+  const previewUrl = rawUrl;
 
   const handleElementSelected = (element: ElementInfo) => {
     setSelectedElement(element);
