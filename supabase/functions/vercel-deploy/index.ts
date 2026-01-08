@@ -26,21 +26,38 @@ serve(async (req) => {
       url += `?teamId=${teamId}`;
     }
 
+    // First, get project info to determine deployment approach
+    const projectResponse = await fetch(
+      `https://api.vercel.com/v9/projects/${projectId}${teamId ? `?teamId=${teamId}` : ''}`,
+      { headers: { 'Authorization': `Bearer ${vercelToken}` } }
+    );
+    
+    const projectData = await projectResponse.json();
+    console.log('Project data:', JSON.stringify(projectData, null, 2));
+    
+    // If project has a linked repo, use the simpler deployment approach
+    const deploymentBody: any = {
+      name: projectId,
+      project: projectId,
+      target: 'preview'
+    };
+    
+    // Only add gitSource if we have the required repoId
+    if (projectData.link?.repoId) {
+      deploymentBody.gitSource = {
+        type: 'github',
+        ref: ref || 'main',
+        repoId: projectData.link.repoId
+      };
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${vercelToken}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        name: projectId,
-        project: projectId,
-        target: 'preview',
-        gitSource: {
-          type: 'github',
-          ref: ref
-        }
-      })
+      body: JSON.stringify(deploymentBody)
     });
 
     if (!response.ok) {
