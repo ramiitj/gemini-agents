@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings, MousePointer, Loader2 } from "lucide-react";
+import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings, MousePointer, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DiffViewer from "./DiffViewer";
 import DeploymentStatus from "./DeploymentStatus";
@@ -7,6 +7,8 @@ import PreviewFrame from "./PreviewFrame";
 import FileList from "./FileList";
 import ElementInfoPanel from "./ElementInfoPanel";
 import { useDeployment } from "@/hooks/useDeployment";
+import { useCodeChanges } from "@/hooks/useCodeChanges";
+import { useChangeRequests } from "@/hooks/useChangeRequests";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
@@ -17,17 +19,22 @@ interface PreviewPanelProps {
   projectId: string;
   vercelProjectId: string | null;
   githubRepo: string | null;
+  conversationId?: string;
   onSendToAI?: (element: ElementInfo, request: string) => void;
   onVercelSetup?: (vercelProjectId: string) => void;
 }
 
-const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVercelSetup }: PreviewPanelProps) => {
+const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, onSendToAI, onVercelSetup }: PreviewPanelProps) => {
   const [activeTab, setActiveTab] = useState<Tab>("preview");
   const [showBefore, setShowBefore] = useState(false);
   const [visualEditMode, setVisualEditMode] = useState(false);
   const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
   const [isSettingUpVercel, setIsSettingUpVercel] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  
   const { deployment, status, triggerDeployment } = useDeployment(vercelProjectId);
+  const { changes, approveChanges } = useCodeChanges(projectId, conversationId);
+  const { createChangeRequest } = useChangeRequests(projectId);
   const prevVercelProjectId = useRef(vercelProjectId);
 
   // Auto-trigger deployment when Vercel project is newly set up
@@ -38,9 +45,9 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
     prevVercelProjectId.current = vercelProjectId;
   }, [vercelProjectId, triggerDeployment]);
 
-  const tabs: { id: Tab; label: string }[] = [
+  const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: "preview", label: "Preview" },
-    { id: "changes", label: "Changes" },
+    { id: "changes", label: "Changes", badge: changes.filter(c => !c.approved_at).length || undefined },
     { id: "files", label: "Files" },
   ];
 
@@ -71,6 +78,59 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
     setVisualEditMode(newMode);
     if (!newMode) {
       setSelectedElement(null);
+    }
+  };
+
+  const handleApproveChanges = async () => {
+    const unapprovedChanges = changes.filter(c => !c.approved_at);
+    if (unapprovedChanges.length === 0) {
+      toast.info("No pending changes to approve");
+      return;
+    }
+
+    setIsApproving(true);
+    try {
+      // Approve all pending changes
+      await approveChanges(unapprovedChanges.map(c => c.id));
+
+      // Create a change request for team visibility
+      const filePaths = unapprovedChanges.map(c => c.file_path).join(", ");
+      await createChangeRequest({
+        title: `Changes approved: ${unapprovedChanges.length} files`,
+        description: `Files modified: ${filePaths}`,
+        conversationId,
+        deploymentId: deployment?.id
+      });
+
+      // Log activity
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: project } = await supabase
+          .from('projects')
+          .select('organization_id')
+          .eq('id', projectId)
+          .single();
+
+        if (project?.organization_id) {
+          await supabase.from('activity_log').insert({
+            organization_id: project.organization_id,
+            project_id: projectId,
+            user_id: user.id,
+            action: 'changes_approved',
+            metadata: {
+              files_count: unapprovedChanges.length,
+              file_paths: unapprovedChanges.map(c => c.file_path)
+            }
+          });
+        }
+      }
+
+      toast.success(`Approved ${unapprovedChanges.length} changes`);
+    } catch (error) {
+      console.error('Failed to approve changes:', error);
+      toast.error('Failed to approve changes');
+    } finally {
+      setIsApproving(false);
     }
   };
 
@@ -179,6 +239,8 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
     );
   }
 
+  const pendingChangesCount = changes.filter(c => !c.approved_at).length;
+
   return (
     <div className="flex h-full flex-col">
       {/* Tabs */}
@@ -188,13 +250,18 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-3 text-sm transition-colors ${
+              className={`relative px-4 py-3 text-sm transition-colors ${
                 activeTab === tab.id
                   ? "border-b-2 border-foreground font-medium text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {tab.label}
+              {tab.badge && tab.badge > 0 && (
+                <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">
+                  {tab.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -248,16 +315,17 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
                     {visualEditMode ? "Exit Edit" : "Visual Edit"}
                   </Button>
                 )}
-                {status === "idle" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 gap-1.5 text-xs"
-                    onClick={() => triggerDeployment()}
-                  >
-                    Deploy
-                  </Button>
-                )}
+                {/* Redeploy button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  onClick={() => triggerDeployment()}
+                  disabled={status === "building"}
+                >
+                  <RefreshCw className={`h-3 w-3 ${status === "building" ? "animate-spin" : ""}`} />
+                  {status === "building" ? "Building..." : "Redeploy"}
+                </Button>
                 {rawUrl && (
                   <Button
                     variant="ghost"
@@ -308,13 +376,17 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
 
         {activeTab === "changes" && (
           <div className="p-4 animate-fade-in">
-            <DiffViewer />
+            <DiffViewer projectId={projectId} conversationId={conversationId} />
           </div>
         )}
 
         {activeTab === "files" && (
           <div className="p-4 animate-fade-in">
-            <FileList />
+            <FileList 
+              projectId={projectId} 
+              conversationId={conversationId}
+              onFileClick={() => setActiveTab("changes")}
+            />
           </div>
         )}
       </div>
@@ -325,9 +397,21 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, onSendToAI, onVe
           <RotateCcw className="h-3.5 w-3.5" />
           Undo
         </Button>
-        <Button size="sm" className="ml-auto gap-1.5">
-          <Check className="h-3.5 w-3.5" />
-          Approve changes
+        <Button 
+          size="sm" 
+          className="ml-auto gap-1.5"
+          onClick={handleApproveChanges}
+          disabled={isApproving || pendingChangesCount === 0}
+        >
+          {isApproving ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
+          {pendingChangesCount > 0 
+            ? `Approve ${pendingChangesCount} changes` 
+            : "Approve changes"
+          }
         </Button>
       </div>
     </div>

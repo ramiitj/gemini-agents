@@ -421,10 +421,47 @@ async function executeTool(
       const { file_path, content } = args;
       
       // Initialize if needed (new file case)
+      const original = context.stagedFiles[file_path]?.original || '';
       if (!context.stagedFiles[file_path]) {
         context.stagedFiles[file_path] = { original: '', modified: content };
       } else {
         context.stagedFiles[file_path].modified = content;
+      }
+      
+      // Store change in database for UI display
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      
+      // Get projectId from the request context (passed through args or global)
+      if (supabaseUrl && supabaseKey && (args as any)._projectId) {
+        try {
+          const diff = generateUnifiedDiff(file_path, original, content);
+          const additions = diff.split('\n').filter((l: string) => l.startsWith('+') && !l.startsWith('+++')).length;
+          const deletions = diff.split('\n').filter((l: string) => l.startsWith('-') && !l.startsWith('---')).length;
+          
+          await fetch(`${supabaseUrl}/rest/v1/code_changes`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'apikey': supabaseKey,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+              project_id: (args as any)._projectId,
+              conversation_id: (args as any)._conversationId || null,
+              file_path,
+              status: original ? 'modified' : 'added',
+              original_content: original,
+              modified_content: content,
+              diff_content: diff,
+              additions,
+              deletions
+            })
+          });
+        } catch (e) {
+          console.error('Failed to store code change:', e);
+        }
       }
       
       return { 
