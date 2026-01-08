@@ -152,7 +152,12 @@ export function useConversation(projectId: string | undefined) {
     };
   }, [conversation?.id]);
 
-  const sendMessage = useCallback(async (content: string, githubRepo?: string, visualContext?: any) => {
+  const sendMessage = useCallback(async (
+    content: string, 
+    githubRepo?: string, 
+    visualContext?: any,
+    mode: "chat" | "execution" = "execution"
+  ) => {
     if (!conversation?.id || !projectId) return;
 
     setIsSending(true);
@@ -188,7 +193,7 @@ export function useConversation(projectId: string | undefined) {
         m.id === userMessage.id ? { ...m, id: savedUserMsg.id } : m
       ));
 
-      // Call AI agent with optional visual context
+      // Call AI agent with mode, visual context, and user ID
       const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-agent', {
         body: {
           message: content,
@@ -196,6 +201,8 @@ export function useConversation(projectId: string | undefined) {
           projectId,
           githubRepo,
           visualContext,
+          mode,
+          userId: user?.id,
           history: messages.filter(m => m.role !== 'system').map(m => ({
             role: m.role,
             content: m.content
