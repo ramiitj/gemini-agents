@@ -386,26 +386,72 @@ async function saveAgentSession(
   mode: string
 ): Promise<void> {
   try {
-    await fetch(`${supabaseUrl}/rest/v1/agent_sessions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'apikey': supabaseKey,
-        'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify({
-        project_id: projectId,
-        user_id: userId,
-        github_owner: context.currentRepo?.owner || null,
-        github_repo: context.currentRepo?.repo || null,
-        current_branch: context.currentRepo?.branch || null,
-        staged_files: context.stagedFiles,
-        vercel_project_id: context.lastVercelProjectId || null,
-        agent_mode: mode,
-        updated_at: new Date().toISOString()
-      })
+    // Check if session exists first
+    const checkResponse = await fetch(
+      `${supabaseUrl}/rest/v1/agent_sessions?project_id=eq.${projectId}&user_id=eq.${userId}&select=id`,
+      {
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
+        }
+      }
+    );
+    const existing = await checkResponse.json();
+    
+    const sessionData = {
+      github_owner: context.currentRepo?.owner || null,
+      github_repo: context.currentRepo?.repo || null,
+      current_branch: context.currentRepo?.branch || null,
+      staged_files: context.stagedFiles || {},
+      vercel_project_id: context.lastVercelProjectId || null,
+      agent_mode: mode,
+      updated_at: new Date().toISOString()
+    };
+    
+    console.log('Saving session data:', { 
+      github_owner: sessionData.github_owner, 
+      github_repo: sessionData.github_repo,
+      current_branch: sessionData.current_branch 
     });
+
+    if (existing && existing.length > 0) {
+      // UPDATE existing session
+      const updateRes = await fetch(
+        `${supabaseUrl}/rest/v1/agent_sessions?project_id=eq.${projectId}&user_id=eq.${userId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'apikey': supabaseKey,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify(sessionData)
+        }
+      );
+      if (!updateRes.ok) {
+        console.error('Failed to update session:', await updateRes.text());
+      }
+    } else {
+      // INSERT new session
+      const insertRes = await fetch(`${supabaseUrl}/rest/v1/agent_sessions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          project_id: projectId,
+          user_id: userId,
+          ...sessionData
+        })
+      });
+      if (!insertRes.ok) {
+        console.error('Failed to insert session:', await insertRes.text());
+      }
+    }
   } catch (e) {
     console.error('Failed to save agent session:', e);
   }
@@ -483,6 +529,14 @@ async function executeTool(
       
       context.currentRepo = { owner, repo: repo.replace('.git', ''), branch: targetBranch };
       
+      // IMMEDIATELY save session with branch info so it persists
+      const supabaseUrlEnv = Deno.env.get('SUPABASE_URL');
+      const supabaseKeyEnv = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (supabaseUrlEnv && supabaseKeyEnv && context.projectId && context.userId) {
+        await saveAgentSession(supabaseUrlEnv, supabaseKeyEnv, context.projectId, context.userId, context, 'execution');
+        console.log(`Immediately saved session with branch: ${targetBranch}`);
+      }
+      
       // Get file tree
       const response = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/git/trees/${targetBranch}?recursive=1`,
@@ -503,7 +557,8 @@ async function executeTool(
           repo, 
           branch: targetBranch,
           fileCount: files.length,
-          files: files.slice(0, 50) // Return first 50 files for context
+          files: files.slice(0, 50), // Return first 50 files for context
+          message: `Repository cloned. Working on your personal branch: ${targetBranch}. This branch is auto-managed - never ask the user about branches.`
         },
         context
       };
@@ -1313,9 +1368,19 @@ WORKFLOW:
 Always push to your user branch (never directly to main).`;
 
     // Build comprehensive system prompt per specification
+    // NOTE: This is built AFTER auto-clone so toolContext.currentRepo is populated
     const systemPrompt = `You are an autonomous AI coding agent for Product Compass, a collaborative product development platform. Your role is to translate natural language requests into precise code changes, deploy previews, and facilitate team approvals.
 
 ${modeInstructions}
+
+## CRITICAL BRANCH RULES - READ CAREFULLY
+- Your working branch is: ${toolContext.currentRepo?.branch || '(will be auto-created when you clone)'}
+- **NEVER ask the user which branch to use** - it is ALREADY SET automatically
+- **NEVER ask the user to create a branch** - branches are AUTOMATIC
+- When you clone a repository, your personal user branch is created automatically
+- When you commit with git_add_commit_push, use NO branch argument - it uses your current branch automatically
+- You MUST NOT push to main - only to your auto-assigned user branch
+- The branch in your context is the ONLY branch you should use
 
 ## Core Behaviors
 
@@ -1333,11 +1398,11 @@ ${modeInstructions}
 
 For each user request:
 1. Acknowledge the request and explain your plan
-2. Clone/pull the latest code from the specified branch (this automatically creates your user branch)
+2. If no repo context, clone the repo (branch is auto-created, don't ask user)
 3. Read relevant files to understand context
 4. Generate minimal code changes
 5. Show the diff to the user for feedback
-6. If approved, commit and push changes (branch is automatic, don't ask)
+6. If approved, commit and push changes using git_add_commit_push (do NOT specify branch - it uses current automatically)
 7. Vercel will automatically deploy the branch
 8. Report when changes are pushed
 9. On approval, create GitHub Pull Request to merge to main
@@ -1345,14 +1410,14 @@ For each user request:
 ## Available Tools (15 total)
 
 ### Repository Tools
-- github_clone_repo - Clone repository for fresh context (auto-creates user branch)
+- github_clone_repo - Clone repository (auto-creates your user branch - NEVER ASK USER ABOUT BRANCHES)
 - file_read - Read file contents (always do this before writing)
 - file_write - Create or modify files
 - file_delete - Remove files (requires confirmation)
 - list_directory - Browse directory structure
 - search_code - Find code patterns across the repo
 - generate_diff - Preview changes before committing
-- git_add_commit_push - Commit and push changes (branch is automatic)
+- git_add_commit_push - Commit and push changes (uses current branch automatically - DO NOT pass branch argument)
 
 ### Vercel Tools
 - vercel_create_project - Create new Vercel project from GitHub repo
@@ -1365,7 +1430,7 @@ For each user request:
 - analyze_visual_element - Process user-selected elements from the preview
 
 ### GitHub Integration
-- github_create_pull_request - Create PR for review
+- github_create_pull_request - Create PR for review (only when user wants to merge to main)
 
 ## Visual Editing Workflow
 
@@ -1386,8 +1451,8 @@ When the user sends a message with visual element context (they selected an elem
 - Always push to user branches, never directly to main
 
 ## Current Context
-- GitHub Repository: ${githubRepo || existingSession?.github_repo ? `https://github.com/${existingSession?.github_owner || ''}/${existingSession?.github_repo || githubRepo}` : 'Not connected'}
-- Current Branch: ${toolContext.currentRepo?.branch || 'Not set (will be created on clone)'}
+- GitHub Repository: ${toolContext.currentRepo ? `https://github.com/${toolContext.currentRepo.owner}/${toolContext.currentRepo.repo}` : (githubRepo || 'Not connected')}
+- Current Branch: ${toolContext.currentRepo?.branch || '(auto-created on clone)'}
 - Project ID: ${projectId}
 - Conversation ID: ${conversationId}
 ${visualContext ? `
