@@ -2569,6 +2569,100 @@ User Request: ${message}`;
       { role: 'user', parts: [{ text: userMessage }] }
     ];
 
+    // Web Search Mode - Use Google Search Grounding
+    if (mode === 'web_search') {
+      console.log('Web Search mode - using Google Search grounding');
+      
+      const webSearchSystemPrompt = `You are a web search assistant with real-time access to Google Search.
+
+## YOUR ROLE
+You help users find information on the web by searching Google and providing comprehensive answers with citations.
+
+## INSTRUCTIONS
+1. Use Google Search to find real-time, up-to-date information
+2. ALWAYS cite your sources with URLs
+3. For image searches, describe what you found and include image URLs when available
+4. For video searches, provide video titles, channels, and links
+5. For news, prioritize recent articles from reliable sources
+6. Summarize findings clearly and concisely
+
+## RESPONSE FORMAT
+- Start with a direct answer to the query
+- Include relevant details from multiple sources
+- End with a "Sources:" section listing URLs
+- For images, format as: ![Image description](image_url)
+
+## IMPORTANT
+- You are ONLY for web search - do not discuss code editing or deployment
+- If asked about code changes, suggest switching to Chat or Execute mode
+- Always acknowledge when information might be outdated`;
+
+      const vertexUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectIdGoogle}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent`;
+      
+      const vertexResponse = await fetch(vertexUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: webSearchSystemPrompt }]
+          },
+          contents: messages,
+          tools: [{ googleSearch: {} }],  // Enable Google Search grounding
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 4096
+          }
+        })
+      });
+
+      const vertexData = await vertexResponse.json();
+      console.log('Web Search Vertex AI response:', JSON.stringify(vertexData).substring(0, 1000));
+      
+      if (vertexData.error) {
+        throw new Error(`Vertex AI error: ${vertexData.error.message}`);
+      }
+
+      const candidate = vertexData.candidates?.[0];
+      if (!candidate) {
+        throw new Error('No response from Vertex AI');
+      }
+
+      let responseText = candidate.content?.parts?.[0]?.text || '';
+      
+      // Extract grounding metadata for citations
+      const groundingMetadata = candidate.groundingMetadata;
+      const groundingChunks = groundingMetadata?.groundingChunks || [];
+      
+      // Format citations if available
+      if (groundingChunks.length > 0) {
+        let citations = '\n\n---\n**Sources:**\n';
+        groundingChunks.forEach((chunk: any, i: number) => {
+          if (chunk.web?.uri) {
+            citations += `${i + 1}. [${chunk.web.title || 'Source'}](${chunk.web.uri})\n`;
+          }
+        });
+        responseText += citations;
+      }
+      
+      // Save session
+      if (supabaseUrl && supabaseKey && projectId && userId) {
+        await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, toolContext, mode);
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          response: responseText,
+          success: true,
+          mode: 'web_search',
+          groundingMetadata
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // In execution mode, filter out vercel_trigger_deployment to force use of autonomous_deploy_and_verify
     const executionBlockedTools = ['vercel_trigger_deployment'];
     const activeTools = mode === 'chat'

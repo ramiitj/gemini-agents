@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
-import type { FileAttachment, SearchAttachment } from "@/types/search";
+import type { FileAttachment, SearchAttachment, AgentMode } from "@/types/search";
 
 interface Message {
   id: string;
@@ -164,7 +164,7 @@ export function useConversation(projectId: string | undefined) {
     content: string, 
     githubRepo?: string, 
     visualContext?: any,
-    mode: "chat" | "execution" = "execution",
+    mode: AgentMode = "execution",
     attachments?: FileAttachment[],
     searchContext?: SearchAttachment[]
   ) => {
