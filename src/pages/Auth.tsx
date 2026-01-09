@@ -12,6 +12,7 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { signIn, signUp, user } = useAuth();
@@ -23,12 +24,43 @@ const Auth = () => {
     }
   }, [user, navigate]);
 
+  // Auto-generate username from name
+  const handleNameChange = (value: string) => {
+    setName(value);
+    if (!username || username === slugify(name)) {
+      setUsername(slugify(value));
+    }
+  };
+
+  const slugify = (text: string): string => {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .substring(0, 20);
+  };
+
+  const validateUsername = (value: string): boolean => {
+    const regex = /^[a-z0-9-]{3,20}$/;
+    return regex.test(value);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
+    if (isSignUp && username && !validateUsername(username)) {
+      toast({
+        title: "Invalid username",
+        description: "Username must be 3-20 characters, lowercase letters, numbers, and hyphens only.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
     const { error } = isSignUp
-      ? await signUp(email, password, name)
+      ? await signUp(email, password, name, username || undefined)
       : await signIn(email, password);
 
     setLoading(false);
@@ -59,16 +91,34 @@ const Auth = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {isSignUp && (
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-              />
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  placeholder="Your name"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="your-username"
+                  maxLength={20}
+                  className="font-mono"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used for your branch name (e.g., {username || 'your-username'}/feature)
+                </p>
+              </div>
+            </>
           )}
 
           <div className="space-y-2">
