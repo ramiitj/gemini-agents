@@ -1,10 +1,10 @@
 import { useRef, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Image, Globe, MessageSquare, Rocket } from "lucide-react";
 import MessageBubble from "./MessageBubble";
 import AgentActivityIndicator from "./AgentActivityIndicator";
 import type { Message } from "./ChatContainer";
 import type { AgentActivity } from "@/hooks/useAgentActivity";
-import type { SearchAttachment } from "@/types/search";
+import type { SearchAttachment, AgentMode } from "@/types/search";
 
 interface MessageListProps {
   messages: Message[];
@@ -12,20 +12,55 @@ interface MessageListProps {
   activities?: AgentActivity[];
   onPinResult?: (result: SearchAttachment) => void;
   pinnedUrls?: string[];
+  currentMode?: AgentMode;
 }
+
+const getModeLoadingConfig = (mode?: AgentMode) => {
+  switch (mode) {
+    case 'image_search':
+      return { 
+        icon: Image, 
+        text: 'Searching for images...',
+        initialText: 'Starting image search...'
+      };
+    case 'web_search':
+      return { 
+        icon: Globe, 
+        text: 'Searching the web...',
+        initialText: 'Starting web search...'
+      };
+    case 'chat':
+      return { 
+        icon: MessageSquare, 
+        text: 'Thinking...',
+        initialText: 'Processing...'
+      };
+    case 'execution':
+    default:
+      return { 
+        icon: Rocket, 
+        text: 'Working on your request...',
+        initialText: 'Starting agent...'
+      };
+  }
+};
 
 const MessageList = ({ 
   messages, 
   isTyping, 
   activities = [],
   onPinResult,
-  pinnedUrls = []
+  pinnedUrls = [],
+  currentMode
 }: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
+
+  const loadingConfig = getModeLoadingConfig(currentMode);
+  const LoadingIcon = loadingConfig.icon;
 
   return (
     <div className="flex-1 overflow-y-auto p-4">
@@ -46,8 +81,8 @@ const MessageList = ({
               <AgentActivityIndicator activities={activities} />
             ) : (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-border/50">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">Starting agent...</span>
+                <LoadingIcon className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">{loadingConfig.initialText}</span>
               </div>
             )}
             
@@ -57,7 +92,7 @@ const MessageList = ({
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" style={{ animationDelay: '150ms' }} />
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" style={{ animationDelay: '300ms' }} />
               </span>
-              <span>AI is working...</span>
+              <span>{loadingConfig.text}</span>
             </div>
           </div>
         )}

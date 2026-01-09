@@ -160,6 +160,7 @@ const ChatContainer = ({
         activities={activities}
         onPinResult={handlePinResult}
         pinnedUrls={pinnedUrls}
+        currentMode={mode}
       />
 
       {/* Pinned results bar */}
