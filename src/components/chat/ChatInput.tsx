@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import ModeToggle from "./ModeToggle";
 import ChatScreenshotButton from "./ChatScreenshotButton";
-import ChatFileUpload, { type FileAttachment } from "./ChatFileUpload";
-import AttachmentsPreview, { type Attachment } from "./AttachmentsPreview";
+import ChatFileUpload from "./ChatFileUpload";
+import AttachmentsPreview from "./AttachmentsPreview";
+import type { FileAttachment } from "@/types/search";
 
 interface ChatInputProps {
-  onSend: (content: string, attachments?: Attachment[]) => void;
+  onSend: (content: string, attachments?: FileAttachment[]) => void;
   previewUrl?: string | null;
   disabled?: boolean;
   sessionLoading?: boolean;
@@ -25,7 +26,7 @@ const ChatInput = ({
   onModeChange
 }: ChatInputProps) => {
   const [value, setValue] = useState("");
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,12 +46,8 @@ const ChatInput = ({
   };
 
   const handleFilesSelected = (files: FileAttachment[]) => {
-    setAttachments(prev => [...prev, ...files.map(f => ({
-      type: 'file' as const,
-      name: f.name,
-      preview: f.preview,
-      content: f.content
-    }))]);
+    // Directly add files - they already have correct type structure
+    setAttachments(prev => [...prev, ...files]);
   };
 
   const handleRemoveAttachment = (index: number) => {

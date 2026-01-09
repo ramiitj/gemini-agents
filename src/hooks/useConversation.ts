@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
+import type { FileAttachment, SearchAttachment } from "@/types/search";
+
 interface Message {
   id: string;
   role: "user" | "assistant" | "system";
@@ -162,7 +164,9 @@ export function useConversation(projectId: string | undefined) {
     content: string, 
     githubRepo?: string, 
     visualContext?: any,
-    mode: "chat" | "execution" = "execution"
+    mode: "chat" | "execution" = "execution",
+    attachments?: FileAttachment[],
+    searchContext?: SearchAttachment[]
   ) => {
     if (!conversation?.id || !projectId || !user) return;
 
@@ -198,7 +202,7 @@ export function useConversation(projectId: string | undefined) {
         m.id === userMessage.id ? { ...m, id: savedUserMsg.id } : m
       ));
 
-      // Call AI agent with mode, visual context, and user ID
+      // Call AI agent with mode, visual context, attachments, and search context
       const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-agent', {
         body: {
           message: content,
@@ -208,6 +212,20 @@ export function useConversation(projectId: string | undefined) {
           visualContext,
           mode,
           userId: user?.id,
+          attachments: attachments?.map(a => ({
+            type: a.type,
+            name: a.name,
+            url: a.url,
+            preview: a.preview,
+            content: a.content
+          })),
+          searchContext: searchContext?.map(s => ({
+            type: s.type,
+            title: s.title,
+            url: s.url,
+            snippet: s.snippet,
+            filePath: s.filePath
+          })),
           history: messages.filter(m => m.role !== 'system').map(m => ({
             role: m.role,
             content: m.content

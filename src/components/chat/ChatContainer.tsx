@@ -7,7 +7,7 @@ import { useAgentActivity } from "@/hooks/useAgentActivity";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GitBranch, FileCode } from "lucide-react";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
-import type { Attachment } from "./AttachmentsPreview";
+import type { FileAttachment, SearchAttachment } from "@/types/search";
 
 export interface Message {
   id: string;
@@ -32,6 +32,7 @@ interface ChatContainerProps {
   previewUrl?: string | null;
   visualContext?: VisualContext | null;
   onVisualContextHandled?: () => void;
+  searchContext?: SearchAttachment[];
 }
 
 const ChatContainer = ({ 
@@ -39,7 +40,8 @@ const ChatContainer = ({
   githubRepo, 
   previewUrl,
   visualContext, 
-  onVisualContextHandled
+  onVisualContextHandled,
+  searchContext
 }: ChatContainerProps) => {
   const { messages, isLoading, isSending, sendMessage, conversation } = useConversation(projectId);
   const { session, loading: sessionLoading, updateMode } = useAgentSession(projectId);
@@ -48,26 +50,19 @@ const ChatContainer = ({
   // Default to "execution" mode, only use session mode after it loads
   const mode = sessionLoading ? "execution" : (session?.agent_mode as "chat" | "execution") || "execution";
 
-  const handleSend = (content: string, attachments?: Attachment[], context?: VisualContext) => {
+  const handleSend = (content: string, attachments?: FileAttachment[], context?: VisualContext) => {
     if (sessionLoading) return;
     clearActivities();
     
-    // Build message with attachment context
-    let messageContent = content;
-    if (attachments && attachments.length > 0) {
-      const attachmentInfo = attachments.map(a => {
-        if (a.type === 'screenshot') {
-          return `[Screenshot of ${a.url}]`;
-        } else if (a.content) {
-          return `[File: ${a.name}]\n\`\`\`\n${a.content.substring(0, 2000)}${a.content.length > 2000 ? '...' : ''}\n\`\`\``;
-        } else {
-          return `[Attached: ${a.name}]`;
-        }
-      }).join('\n\n');
-      messageContent = `${attachmentInfo}\n\n${content}`;
-    }
-    
-    sendMessage(messageContent, githubRepo || undefined, context?.element, mode);
+    // Pass raw attachments and search context to sendMessage - backend handles formatting
+    sendMessage(
+      content, 
+      githubRepo || undefined, 
+      context?.element, 
+      mode,
+      attachments,
+      searchContext
+    );
   };
 
   const handleModeChange = (newMode: "chat" | "execution") => {

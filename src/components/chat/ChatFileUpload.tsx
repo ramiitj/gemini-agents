@@ -2,14 +2,7 @@ import { useRef } from "react";
 import { Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-
-export interface FileAttachment {
-  type: 'file';
-  name: string;
-  file: File;
-  preview?: string;
-  content?: string;
-}
+import type { FileAttachment } from "@/types/search";
 
 interface ChatFileUploadProps {
   onFilesSelected: (files: FileAttachment[]) => void;
