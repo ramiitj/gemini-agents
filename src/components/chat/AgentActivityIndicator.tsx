@@ -1,4 +1,4 @@
-import { Search, FileCode, GitCommit, Rocket, ScrollText, Wrench, Camera, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Search, FileCode, GitCommit, Rocket, ScrollText, Wrench, Camera, CheckCircle2, XCircle, Loader2, Image, Globe } from "lucide-react";
 import type { AgentActivity } from "@/hooks/useAgentActivity";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +14,9 @@ const activityConfig: Record<string, { icon: React.ElementType; label: string }>
   checking_logs: { icon: ScrollText, label: 'Reading build logs...' },
   fixing: { icon: Wrench, label: 'Auto-fixing error...' },
   screenshot: { icon: Camera, label: 'Taking screenshot...' },
-  complete: { icon: CheckCircle2, label: 'Complete' }
+  complete: { icon: CheckCircle2, label: 'Complete' },
+  searching_images: { icon: Image, label: 'Searching for images...' },
+  searching_web: { icon: Globe, label: 'Searching the web...' }
 };
 
 const ActivityStep = ({ activity }: { activity: AgentActivity }) => {

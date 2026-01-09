@@ -2592,21 +2592,35 @@ User Request: ${message}`;
         await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, updatedContext, mode);
       }
       
+      // Clean response helper for deploy shortcut
+      const cleanText = (text: string): string => {
+        return text
+          .replace(/\*\*\*([^*]+)\*\*\*/g, '$1')
+          .replace(/\*\*+([^*]+)\*\*+/g, '$1')
+          .replace(/(?<![*\s])\*([^*\n]+)\*(?![*])/g, '$1')
+          .replace(/___([^_]+)___/g, '$1')
+          .replace(/__([^_]+)__/g, '$1')
+          .replace(/(?<![_\w])_([^_\n]+)_(?![_\w])/g, '$1')
+          .replace(/^\s*\*\s+/gm, '- ')
+          .replace(/  +/g, ' ')
+          .trim();
+      };
+
       let responseText: string;
       if (deployResult.error) {
         responseText = `Deployment failed: ${deployResult.error}`;
       } else {
-        responseText = `🚀 **Deployment triggered successfully!**\n\n` +
-          `- **Branch:** ${deployBranch}\n` +
-          `- **Deployment ID:** ${deployResult.deploymentId || 'pending'}\n` +
-          `- **Status:** ${deployResult.status || 'queued'}\n` +
-          (deployResult.url ? `- **Preview URL:** https://${deployResult.url}\n` : '') +
+        responseText = `Deployment triggered successfully!\n\n` +
+          `- Branch: ${deployBranch}\n` +
+          `- Deployment ID: ${deployResult.deploymentId || 'pending'}\n` +
+          `- Status: ${deployResult.status || 'queued'}\n` +
+          (deployResult.url ? `- Preview URL: https://${deployResult.url}\n` : '') +
           `\nVercel is now building your project. The preview URL will be available once the build completes.`;
       }
       
       return new Response(
         JSON.stringify({
-          response: responseText,
+          response: cleanText(responseText),
           success: !deployResult.error,
           mode,
           branch: deployBranch,
@@ -2702,7 +2716,7 @@ You help users find information on the web by searching Google and providing com
       
       // Format citations if available
       if (groundingChunks.length > 0) {
-        let citations = '\n\n---\n**Sources:**\n';
+        let citations = '\n\n---\nSources:\n';
         groundingChunks.forEach((chunk: any, i: number) => {
           if (chunk.web?.uri) {
             citations += `${i + 1}. [${chunk.web.title || 'Source'}](${chunk.web.uri})\n`;
@@ -2710,6 +2724,18 @@ You help users find information on the web by searching Google and providing com
         });
         responseText += citations;
       }
+      
+      // Clean markdown from response
+      responseText = responseText
+        .replace(/\*\*\*([^*]+)\*\*\*/g, '$1')
+        .replace(/\*\*+([^*]+)\*\*+/g, '$1')
+        .replace(/(?<![*\s])\*([^*\n]+)\*(?![*])/g, '$1')
+        .replace(/___([^_]+)___/g, '$1')
+        .replace(/__([^_]+)__/g, '$1')
+        .replace(/(?<![_\w])_([^_\n]+)_(?![_\w])/g, '$1')
+        .replace(/^\s*\*\s+/gm, '- ')
+        .replace(/  +/g, ' ')
+        .trim();
       
       // Save session
       if (supabaseUrl && supabaseKey && projectId && userId) {
@@ -2737,125 +2763,72 @@ You help users find information on the web by searching Google and providing com
       );
     }
 
-    // Image Search Mode - Use Google Custom Search API with image type
+    // Image Search Mode - Use Google Custom Search API directly
     if (mode === 'image_search') {
-      console.log('Image Search mode - using Google Custom Search API for images');
+      console.log('Image Search mode - using Google Custom Search API directly');
       
-      // For image search, we'll use the Gemini model with web grounding
-      // but explicitly ask for image results
-      const imageSearchPrompt = `Search for images related to: "${message}"
-
-Please find and return relevant images with their URLs. For each image found, provide:
-1. Image title/description
-2. Direct image URL
-3. Source website URL
-4. Display domain
-
-Format your response as a JSON array of image results.`;
-
-      const searchMessages = [
-        { role: 'user', parts: [{ text: imageSearchPrompt }] }
-      ];
+      const googleApiKey = Deno.env.get('GOOGLE_SEARCH_API_KEY');
+      const searchEngineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID');
       
-      const imageSearchSystemPrompt = `You are an image search assistant. Return ONLY valid JSON without markdown formatting or code blocks.
-
-CRITICAL: Do NOT wrap your response in \`\`\`json or any markdown. Return raw JSON only.
-
-Return this exact structure:
-{
-  "images": [
-    {
-      "title": "Image title or description",
-      "link": "Direct URL to the image file",
-      "thumbnailLink": "Thumbnail URL (use same as link if unavailable)",
-      "contextLink": "URL of the source page",
-      "displayLink": "domain.com"
-    }
-  ],
-  "summary": "Brief description"
-}
-
-Search for high-quality, relevant images from diverse sources.`;
-
-      const vertexUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectIdGoogle}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent`;
+      if (!googleApiKey || !searchEngineId) {
+        console.error('Missing Google Search credentials:', { 
+          hasApiKey: !!googleApiKey, 
+          hasEngineId: !!searchEngineId 
+        });
+        return new Response(
+          JSON.stringify({ 
+            response: 'Image search is not configured. Please add GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID secrets.',
+            success: false,
+            mode: 'image_search',
+            imageResults: []
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       
-      const vertexResponse = await fetch(vertexUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: imageSearchSystemPrompt }]
-          },
-          contents: searchMessages,
-          tools: [{ google_search: {} }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 4096
-          }
-        })
-      });
-
-      const vertexData = await vertexResponse.json();
-      console.log('Image Search response:', JSON.stringify(vertexData).substring(0, 500));
+      // Call Google Custom Search API with searchType=image
+      const searchUrl = `https://www.googleapis.com/customsearch/v1?` +
+        `key=${encodeURIComponent(googleApiKey)}` +
+        `&cx=${encodeURIComponent(searchEngineId)}` +
+        `&q=${encodeURIComponent(message)}` +
+        `&searchType=image` +
+        `&num=10` +
+        `&safe=active`;
       
-      if (vertexData.error) {
-        throw new Error(`Vertex AI error: ${vertexData.error.message}`);
+      console.log('Calling Google Custom Search API for images');
+      
+      const searchResponse = await fetch(searchUrl);
+      const searchData = await searchResponse.json();
+      
+      console.log('Google Custom Search response status:', searchResponse.status);
+      
+      if (searchData.error) {
+        console.error('Google Custom Search error:', searchData.error);
+        return new Response(
+          JSON.stringify({ 
+            response: `Image search failed: ${searchData.error.message}`,
+            success: false,
+            mode: 'image_search',
+            imageResults: []
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
-
-      const candidate = vertexData.candidates?.[0];
-      if (!candidate) {
-        throw new Error('No response from Vertex AI');
-      }
-
-      let responseText = candidate.content?.parts?.[0]?.text || '';
-      const groundingMetadata = candidate.groundingMetadata;
-      const groundingChunks = groundingMetadata?.groundingChunks || [];
-
-      // Try to parse image results from response
-      let imageResults: any[] = [];
-      try {
-        // Strip markdown code blocks before parsing
-        const cleanedResponse = responseText
-          .replace(/```json\s*/gi, '')
-          .replace(/```\s*/g, '')
-          .trim();
-
-        // Try to extract JSON from the cleaned response
-        const jsonMatch = cleanedResponse.match(/\{[\s\S]*"images"[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          imageResults = parsed.images || [];
-          console.log(`Parsed ${imageResults.length} images from JSON response`);
-        }
-      } catch (e) {
-        console.log('Could not parse image JSON, using grounding chunks. Error:', e);
-        // Fallback to grounding chunks for image-like results
-        imageResults = groundingChunks
-          .filter((chunk: any) => {
-            const url = chunk.web?.uri?.toLowerCase() || '';
-            return url.match(/\.(jpg|jpeg|png|gif|webp|svg)/) || 
-                   url.includes('image') ||
-                   url.includes('photo');
-          })
-          .map((chunk: any) => ({
-            title: chunk.web?.title || 'Image',
-            link: chunk.web?.uri,
-            thumbnailLink: chunk.web?.uri,
-            contextLink: chunk.web?.uri,
-            displayLink: new URL(chunk.web?.uri).hostname.replace('www.', '')
-          }));
-      }
-
-      // Replace raw JSON response with user-friendly message when images are found
-      if (imageResults.length > 0) {
-        responseText = `Found ${imageResults.length} images for "${message}"`;
-      } else if (responseText.includes('"images"')) {
-        // Had JSON but no images parsed
-        responseText = 'No images found for your search. Try a different query.';
-      }
+      
+      // Parse image results from Google Custom Search response
+      const imageResults = (searchData.items || []).map((item: any) => ({
+        title: item.title || 'Image',
+        link: item.link, // Direct image URL
+        thumbnailLink: item.image?.thumbnailLink || item.link,
+        contextLink: item.image?.contextLink || item.displayLink,
+        displayLink: item.displayLink || new URL(item.link).hostname.replace('www.', '')
+      }));
+      
+      console.log(`Found ${imageResults.length} images from Google Custom Search`);
+      
+      const responseText = imageResults.length > 0
+        ? `Found ${imageResults.length} images for "${message}"`
+        : 'No images found for your search. Try a different query.';
       
       // Save session
       if (supabaseUrl && supabaseKey && projectId && userId) {
@@ -2869,13 +2842,8 @@ Search for high-quality, relevant images from diverse sources.`;
           mode: 'image_search',
           imageResults,
           groundingMetadata: {
-            groundingChunks: groundingChunks.map((chunk: any) => ({
-              web: {
-                uri: chunk.web?.uri,
-                title: chunk.web?.title
-              }
-            })),
-            webSearchQueries: groundingMetadata?.webSearchQueries || []
+            groundingChunks: [],
+            webSearchQueries: [message]
           }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -2992,13 +2960,20 @@ Search for high-quality, relevant images from diverse sources.`;
     // Clean any remaining markdown symbols from response
     const cleanResponse = (text: string): string => {
       return text
-        // Remove bold asterisks
-        .replace(/\*\*([^*]+)\*\*/g, '$1')
-        // Remove italic asterisks  
-        .replace(/\*([^*]+)\*/g, '$1')
-        // Remove underscore emphasis
+        // Remove triple asterisks (bold+italic)
+        .replace(/\*\*\*([^*]+)\*\*\*/g, '$1')
+        // Remove bold asterisks (handle nested cases)
+        .replace(/\*\*+([^*]+)\*\*+/g, '$1')
+        // Remove italic asterisks (non-greedy, avoid lists)
+        .replace(/(?<![*\s])\*([^*\n]+)\*(?![*])/g, '$1')
+        // Remove triple underscores
+        .replace(/___([^_]+)___/g, '$1')
+        // Remove bold underscores
         .replace(/__([^_]+)__/g, '$1')
-        .replace(/_([^_]+)_/g, '$1')
+        // Remove italic underscores (avoid breaking snake_case)
+        .replace(/(?<![_\w])_([^_\n]+)_(?![_\w])/g, '$1')
+        // Convert asterisk bullets to dashes
+        .replace(/^\s*\*\s+/gm, '- ')
         // Clean up extra whitespace
         .replace(/  +/g, ' ')
         .trim();
