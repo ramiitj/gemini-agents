@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import MessageList from "./MessageList";
 import ChatInput from "./ChatInput";
 import { useConversation } from "@/hooks/useConversation";
@@ -25,35 +25,70 @@ export interface VisualContext {
   request: string;
 }
 
+export interface ScreenshotContext {
+  url: string;
+  imageData?: string;
+}
+
 interface ChatContainerProps {
   projectId: string;
   githubRepo?: string | null;
   visualContext?: VisualContext | null;
   onVisualContextHandled?: () => void;
+  pendingScreenshot?: ScreenshotContext | null;
+  onScreenshotHandled?: () => void;
 }
 
-const ChatContainer = ({ projectId, githubRepo, visualContext, onVisualContextHandled }: ChatContainerProps) => {
+const ChatContainer = ({ 
+  projectId, 
+  githubRepo, 
+  visualContext, 
+  onVisualContextHandled,
+  pendingScreenshot,
+  onScreenshotHandled
+}: ChatContainerProps) => {
   const { messages, isLoading, isSending, sendMessage, conversation } = useConversation(projectId);
   const { session, loading: sessionLoading, updateMode } = useAgentSession(projectId);
   const { activities, clearActivities } = useAgentActivity(projectId, conversation?.id);
+  const [localScreenshot, setLocalScreenshot] = useState<ScreenshotContext | null>(null);
 
   // Default to "execution" mode, only use session mode after it loads
   const mode = sessionLoading ? "execution" : (session?.agent_mode as "chat" | "execution") || "execution";
 
-  const handleSend = (content: string, context?: VisualContext) => {
+  // Sync external screenshot to local state
+  useEffect(() => {
+    if (pendingScreenshot) {
+      setLocalScreenshot(pendingScreenshot);
+      onScreenshotHandled?.();
+    }
+  }, [pendingScreenshot, onScreenshotHandled]);
+
+  const handleSend = (content: string, screenshotContext?: ScreenshotContext, context?: VisualContext) => {
     if (sessionLoading) return; // Don't send until session loaded
     clearActivities(); // Clear old activities before sending new message
-    sendMessage(content, githubRepo || undefined, context?.element, mode);
+    
+    // If screenshot context is provided, prepend it to the message
+    let messageContent = content;
+    if (screenshotContext?.url) {
+      messageContent = `[Screenshot of ${screenshotContext.url}]\n\n${content}`;
+    }
+    
+    sendMessage(messageContent, githubRepo || undefined, context?.element, mode);
+    setLocalScreenshot(null);
   };
 
   const handleModeChange = (newMode: "chat" | "execution") => {
     updateMode(newMode);
   };
 
+  const handleClearScreenshot = () => {
+    setLocalScreenshot(null);
+  };
+
   // Auto-send when visual context is provided
   useEffect(() => {
     if (visualContext && !isSending) {
-      handleSend(visualContext.request, visualContext);
+      handleSend(visualContext.request, undefined, visualContext);
       onVisualContextHandled?.();
     }
   }, [visualContext]);
@@ -95,11 +130,13 @@ const ChatContainer = ({ projectId, githubRepo, visualContext, onVisualContextHa
       
       <MessageList messages={messages} isTyping={isSending} activities={activities} />
       <ChatInput 
-        onSend={(content) => handleSend(content)} 
+        onSend={(content, screenshot) => handleSend(content, screenshot)} 
         disabled={isSending}
         sessionLoading={sessionLoading}
         mode={mode}
         onModeChange={handleModeChange}
+        pendingScreenshot={localScreenshot}
+        onClearScreenshot={handleClearScreenshot}
       />
     </div>
   );

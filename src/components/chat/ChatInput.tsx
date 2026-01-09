@@ -1,25 +1,36 @@
 import { useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Camera, X, Image } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import ModeToggle from "./ModeToggle";
 
 interface ChatInputProps {
-  onSend: (content: string) => void;
+  onSend: (content: string, screenshotContext?: { url: string; imageData?: string }) => void;
   disabled?: boolean;
   sessionLoading?: boolean;
   mode?: "chat" | "execution";
   onModeChange?: (mode: "chat" | "execution") => void;
+  pendingScreenshot?: { url: string; imageData?: string } | null;
+  onClearScreenshot?: () => void;
 }
 
-const ChatInput = ({ onSend, disabled, sessionLoading, mode = "execution", onModeChange }: ChatInputProps) => {
+const ChatInput = ({ 
+  onSend, 
+  disabled, 
+  sessionLoading, 
+  mode = "execution", 
+  onModeChange,
+  pendingScreenshot,
+  onClearScreenshot
+}: ChatInputProps) => {
   const [value, setValue] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!value.trim()) return;
-    onSend(value.trim());
+    onSend(value.trim(), pendingScreenshot || undefined);
     setValue("");
+    if (onClearScreenshot) onClearScreenshot();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -43,13 +54,40 @@ const ChatInput = ({ onSend, disabled, sessionLoading, mode = "execution", onMod
           {mode === "chat" ? "Planning and discussion" : "Making code changes"}
         </span>
       </div>
+      
+      {/* Screenshot attachment indicator */}
+      {pendingScreenshot && (
+        <div className="mb-3 flex items-center gap-2 p-2 rounded-md bg-muted/50 border border-border">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Camera className="h-3.5 w-3.5 text-primary" />
+            <span>Screenshot attached from</span>
+            <span className="font-mono text-[10px] truncate max-w-[200px]">
+              {pendingScreenshot.url.replace('https://', '')}
+            </span>
+          </div>
+          {onClearScreenshot && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 ml-auto"
+              onClick={onClearScreenshot}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      )}
+      
       <div className="flex gap-2">
         <Textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={
-            mode === "chat"
+            pendingScreenshot
+              ? "Describe what you want to change in this screenshot..."
+              : mode === "chat"
               ? "Ask questions or discuss your plans..."
               : "Describe what you want to build..."
           }

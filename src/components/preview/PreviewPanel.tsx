@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings, MousePointer, Loader2, RefreshCw, GitPullRequest } from "lucide-react";
+import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings, MousePointer, Loader2, RefreshCw, GitPullRequest, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DiffViewer from "./DiffViewer";
 import DeploymentStatus from "./DeploymentStatus";
@@ -28,9 +28,10 @@ interface PreviewPanelProps {
   conversationId?: string;
   onSendToAI?: (element: ElementInfo, request: string) => void;
   onVercelSetup?: (vercelProjectId: string) => void;
+  onScreenshotCapture?: (url: string) => void;
 }
 
-const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, onSendToAI, onVercelSetup }: PreviewPanelProps) => {
+const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, onSendToAI, onVercelSetup, onScreenshotCapture }: PreviewPanelProps) => {
   const [activeTab, setActiveTab] = useState<Tab>("preview");
   const [showBefore, setShowBefore] = useState(false);
   const [visualEditMode, setVisualEditMode] = useState(false);
@@ -374,6 +375,18 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
                     {visualEditMode ? "Exit Edit" : "Visual Edit"}
                   </Button>
                 )}
+                {/* Screenshot button */}
+                {rawUrl && onScreenshotCapture && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={() => onScreenshotCapture(rawUrl)}
+                  >
+                    <Camera className="h-3 w-3" />
+                    Screenshot
+                  </Button>
+                )}
                 {/* Redeploy button */}
                 <Button
                   variant="outline"
@@ -385,6 +398,7 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
                   <RefreshCw className={`h-3 w-3 ${status === "building" ? "animate-spin" : ""}`} />
                   {status === "building" ? "Building..." : "Redeploy"}
                 </Button>
+                {/* Open in new tab - single consolidated button */}
                 {rawUrl && (
                   <Button
                     variant="ghost"

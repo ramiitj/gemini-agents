@@ -64,7 +64,7 @@ const BranchStatus = ({ branch, deployment, loading, githubOwner, githubRepo }: 
       case "QUEUED":
         return "Queued";
       case "WAITING":
-        return "Waiting for build";
+        return "Waiting";
       case "ERROR":
         return "Failed";
       case "CANCELED":
@@ -80,36 +80,28 @@ const BranchStatus = ({ branch, deployment, loading, githubOwner, githubRepo }: 
 
   return (
     <div className="flex items-center gap-2 text-xs">
+      {/* Branch name with GitHub link */}
       <div className="flex items-center gap-1.5 text-muted-foreground">
         <GitBranch className="h-3.5 w-3.5" />
-        <span className="font-medium">{branch}</span>
-        {githubUrl && (
+        {githubUrl ? (
           <a
             href={githubUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-foreground transition-colors"
+            className="font-medium hover:text-foreground hover:underline transition-colors"
           >
-            <ExternalLink className="h-3 w-3" />
+            {branch}
           </a>
+        ) : (
+          <span className="font-medium">{branch}</span>
         )}
       </div>
 
+      {/* Status badge */}
       <Badge variant={getStatusVariant()} className="gap-1 text-[10px] px-1.5 py-0">
         {getStatusIcon()}
         {getStatusText()}
       </Badge>
-
-      {deployment?.url && deployment.state === "READY" && (
-        <a
-          href={deployment.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary hover:underline"
-        >
-          Preview
-        </a>
-      )}
     </div>
   );
 };

@@ -636,14 +636,15 @@ async function emitActivity(
   status: 'in_progress' | 'complete' | 'error',
   details?: Record<string, any>
 ): Promise<void> {
+  console.log(`[emitActivity] Emitting: type=${activityType}, status=${status}, projectId=${projectId}`);
   try {
-    await fetch(`${supabaseUrl}/rest/v1/agent_activity`, {
+    const response = await fetch(`${supabaseUrl}/rest/v1/agent_activity`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${supabaseKey}`,
         'apikey': supabaseKey,
         'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
+        'Prefer': 'return=representation'
       },
       body: JSON.stringify({
         project_id: projectId,
@@ -653,8 +654,13 @@ async function emitActivity(
         details: details || null
       })
     });
+    const result = await response.json();
+    console.log(`[emitActivity] Response: status=${response.status}`, result);
+    if (!response.ok) {
+      console.error(`[emitActivity] Failed: ${response.status}`, result);
+    }
   } catch (e) {
-    console.error('Failed to emit activity:', e);
+    console.error('[emitActivity] Exception:', e);
   }
 }
 
@@ -2260,6 +2266,12 @@ ${stagedFilesCount > 0
   : '(none - file_write pushes immediately)'}`;
 
     const systemPrompt = `You are an AUTONOMOUS AI coding agent for Product Compass. You translate natural language requests into precise code changes, handle dependencies, deploy previews, and auto-fix build errors.
+
+## OUTPUT FORMAT RULES - CRITICAL
+- NEVER use markdown formatting like asterisks (**bold**), stars (*italic*), or any other markdown in your responses
+- Use plain text only for all responses
+- For emphasis, use CAPS or colons instead of markdown
+- Code snippets should be clearly indented or prefixed, not wrapped in backticks unless showing exact code
 
 ${modeInstructions}
 
