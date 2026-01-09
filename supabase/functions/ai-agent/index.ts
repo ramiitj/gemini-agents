@@ -1584,9 +1584,92 @@ Styles: ${JSON.stringify(visualContext.computedStyles || {}, null, 2)}
 User Request: ${message}`;
     }
 
+    // ==========================================
+    // PHASE M: DEPLOY INTENT SHORTCUT
+    // Bypass LLM entirely for deploy commands
+    // ==========================================
+    const deployIntentPatterns = [
+      /^deploy$/i,
+      /^deploy\s+(the\s+)?project$/i,
+      /^deploy\s+(this|it|now)$/i,
+      /^trigger\s+deploy(ment)?$/i,
+      /^start\s+deploy(ment)?$/i
+    ];
+    
+    const isDeployIntent = deployIntentPatterns.some(p => p.test(message.trim()));
+    
+    console.log('[Deploy Shortcut] Checking deploy intent:', {
+      message: message.trim(),
+      isDeployIntent,
+      mode,
+      vercelProjectId: toolContext.lastVercelProjectId,
+      branch: toolContext.currentRepo?.branch
+    });
+    
+    if (isDeployIntent && mode === 'execution') {
+      console.log('[Deploy Shortcut] TRIGGERED - bypassing LLM');
+      
+      // Check if we have required context
+      if (!toolContext.lastVercelProjectId) {
+        return new Response(
+          JSON.stringify({
+            response: "Cannot deploy: No Vercel project configured for this project. Please set up Vercel integration first.",
+            success: false,
+            mode,
+            shortcut: 'deploy_no_vercel'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      const deployBranch = toolContext.currentRepo?.branch || 'main';
+      console.log(`[Deploy Shortcut] Deploying project=${toolContext.lastVercelProjectId} branch=${deployBranch}`);
+      
+      // Execute deployment directly
+      const { result: deployResult, context: updatedContext } = await executeTool(
+        'vercel_trigger_deployment',
+        { project_id: toolContext.lastVercelProjectId, branch: deployBranch },
+        toolContext
+      );
+      
+      console.log('[Deploy Shortcut] Deployment result:', deployResult);
+      
+      // Save session
+      if (supabaseUrl && supabaseKey && projectId && userId) {
+        await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, updatedContext, mode);
+      }
+      
+      // Format response
+      let responseText: string;
+      if (deployResult.error) {
+        responseText = `Deployment failed: ${deployResult.error}`;
+      } else {
+        responseText = `🚀 **Deployment triggered successfully!**\n\n` +
+          `- **Branch:** ${deployBranch}\n` +
+          `- **Deployment ID:** ${deployResult.deploymentId || 'pending'}\n` +
+          `- **Status:** ${deployResult.status || 'queued'}\n` +
+          (deployResult.url ? `- **Preview URL:** ${deployResult.url}\n` : '') +
+          `\nVercel is now building your project. The preview URL will be available once the build completes.`;
+      }
+      
+      return new Response(
+        JSON.stringify({
+          response: responseText,
+          success: !deployResult.error,
+          mode,
+          branch: deployBranch,
+          shortcut: 'deploy_executed',
+          deploymentId: deployResult.deploymentId
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    // ==========================================
+    // END DEPLOY SHORTCUT
+    // ==========================================
+
+    // Build messages for LLM (Phase L: use systemInstruction instead of user message)
     const messages: any[] = [
-      { role: 'user', parts: [{ text: systemPrompt }] },
-      { role: 'model', parts: [{ text: `I understand. I am ready to help you with code changes following the specified workflow and safety rules. I am currently in ${mode.toUpperCase()} mode${mode === 'chat' ? ' (read-only, planning)' : ' (full tool access)'}. I have access to 15 tools including visual inspection and Vercel project creation capabilities.` }] },
       ...history.map((m: any) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }]
@@ -1622,6 +1705,10 @@ User Request: ${message}`;
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          // Phase L: Use systemInstruction for authoritative system prompt
+          systemInstruction: {
+            parts: [{ text: systemPrompt }]
+          },
           contents: messages,
           tools: [{ functionDeclarations: activeTools }],
           toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
