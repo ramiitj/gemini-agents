@@ -1538,12 +1538,32 @@ When the user sends a message with visual element context (they selected an elem
 - Project ID: ${projectId}
 - Conversation ID: ${conversationId}
 
-## DEPLOYMENT RULES
-- Vercel Project ID is available: ${toolContext.lastVercelProjectId ? 'YES' : 'NO'}
-- Current branch for deployment: ${toolContext.currentRepo?.branch || 'NOT SET'}
-- **NEVER ask the user for Vercel project ID or branch** - use the values above
-- When deploying, call vercel_trigger_deployment WITHOUT arguments - it uses context automatically
-- Vercel auto-deploys on git push, so manual deployment is rarely needed
+## DEPLOYMENT RULES - CRITICAL
+**YOUR DEPLOYMENT CONTEXT:**
+- Vercel Project ID: ${toolContext.lastVercelProjectId || 'NOT CONFIGURED'}
+- Deployment Branch: ${toolContext.currentRepo?.branch || 'NOT SET'}
+
+**IMPORTANT FACTS:**
+1. You CAN deploy EXISTING code on a branch - no new changes required
+2. The branch "${toolContext.currentRepo?.branch || 'user branch'}" ALREADY EXISTS on GitHub with code
+3. Staged files count (${stagedFilesCount}) is for NEW changes only - NOT required for deployment
+4. To deploy, call vercel_trigger_deployment with NO arguments - it auto-uses your context
+
+**WHEN USER SAYS "deploy" or "deploy the project":**
+→ Do NOT ask for branch name or project ID
+→ Do NOT say you need to push changes first (unless user asked you to make code changes)
+→ IMMEDIATELY call: vercel_trigger_deployment() with no arguments
+→ The tool automatically uses: project=${toolContext.lastVercelProjectId}, branch=${toolContext.currentRepo?.branch}
+
+**NEVER SAY THESE THINGS:**
+❌ "I need a branch to deploy to"
+❌ "Please create a branch"  
+❌ "I need to push changes first"
+❌ "I am unable to create a branch"
+❌ "What branch would you like to deploy?"
+
+**CORRECT BEHAVIOR FOR "deploy the project":**
+✅ Immediately call vercel_trigger_deployment tool with empty arguments
 ${visualContext ? `
 ## Visual Element Context (User selected this element)
 - Selector: ${visualContext.selector}
