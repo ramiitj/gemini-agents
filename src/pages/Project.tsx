@@ -34,6 +34,7 @@ const Project = () => {
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
   const [visualContext, setVisualContext] = useState<VisualContext | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id || !user) return;
@@ -64,6 +65,10 @@ const Project = () => {
 
   const handleVercelSetup = useCallback((newVercelProjectId: string) => {
     setProject(prev => prev ? { ...prev, vercel_project_id: newVercelProjectId } : null);
+  }, []);
+
+  const handlePreviewUrlChange = useCallback((url: string | null) => {
+    setPreviewUrl(url);
   }, []);
 
   // Redirect if not authenticated
@@ -121,6 +126,7 @@ const Project = () => {
               <ChatContainer 
                 projectId={project.id} 
                 githubRepo={project.github_repo}
+                previewUrl={previewUrl}
                 visualContext={visualContext}
                 onVisualContextHandled={handleVisualContextHandled}
               />
@@ -132,6 +138,7 @@ const Project = () => {
                 githubRepo={project.github_repo}
                 onSendToAI={handleSendToAI}
                 onVercelSetup={handleVercelSetup}
+                onPreviewUrlChange={handlePreviewUrlChange}
               />
             </div>
             <TeamSidebar organizationId={organization?.id || null} projectId={project.id} />

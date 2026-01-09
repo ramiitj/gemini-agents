@@ -1,36 +1,60 @@
 import { useState } from "react";
-import { Send, Camera, X, Image } from "lucide-react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import ModeToggle from "./ModeToggle";
+import ChatScreenshotButton from "./ChatScreenshotButton";
+import ChatFileUpload, { type FileAttachment } from "./ChatFileUpload";
+import AttachmentsPreview, { type Attachment } from "./AttachmentsPreview";
 
 interface ChatInputProps {
-  onSend: (content: string, screenshotContext?: { url: string; imageData?: string }) => void;
+  onSend: (content: string, attachments?: Attachment[]) => void;
+  previewUrl?: string | null;
   disabled?: boolean;
   sessionLoading?: boolean;
   mode?: "chat" | "execution";
   onModeChange?: (mode: "chat" | "execution") => void;
-  pendingScreenshot?: { url: string; imageData?: string } | null;
-  onClearScreenshot?: () => void;
 }
 
 const ChatInput = ({ 
   onSend, 
+  previewUrl,
   disabled, 
   sessionLoading, 
   mode = "execution", 
-  onModeChange,
-  pendingScreenshot,
-  onClearScreenshot
+  onModeChange
 }: ChatInputProps) => {
   const [value, setValue] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!value.trim()) return;
-    onSend(value.trim(), pendingScreenshot || undefined);
+    onSend(value.trim(), attachments.length > 0 ? attachments : undefined);
     setValue("");
-    if (onClearScreenshot) onClearScreenshot();
+    setAttachments([]);
+  };
+
+  const handleScreenshotCapture = (imageData: string, url: string) => {
+    setAttachments(prev => [...prev, {
+      type: 'screenshot',
+      name: `Screenshot - ${new Date().toLocaleTimeString()}`,
+      url,
+      preview: imageData
+    }]);
+  };
+
+  const handleFilesSelected = (files: FileAttachment[]) => {
+    setAttachments(prev => [...prev, ...files.map(f => ({
+      type: 'file' as const,
+      name: f.name,
+      preview: f.preview,
+      content: f.content
+    }))]);
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -41,52 +65,49 @@ const ChatInput = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-border p-4">
-      <div className="flex items-center gap-2 mb-3">
-        {onModeChange && (
-          <ModeToggle
-            mode={mode}
-            onModeChange={onModeChange}
+    <form onSubmit={handleSubmit} className="border-t border-border">
+      {/* Action Bar */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/20">
+        <div className="flex items-center gap-1">
+          <ChatScreenshotButton
+            previewUrl={previewUrl || null}
+            onCapture={handleScreenshotCapture}
             disabled={disabled}
           />
-        )}
-        <span className="text-xs text-muted-foreground">
-          {mode === "chat" ? "Planning and discussion" : "Making code changes"}
-        </span>
-      </div>
-      
-      {/* Screenshot attachment indicator */}
-      {pendingScreenshot && (
-        <div className="mb-3 flex items-center gap-2 p-2 rounded-md bg-muted/50 border border-border">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Camera className="h-3.5 w-3.5 text-primary" />
-            <span>Screenshot attached from</span>
-            <span className="font-mono text-[10px] truncate max-w-[200px]">
-              {pendingScreenshot.url.replace('https://', '')}
-            </span>
-          </div>
-          {onClearScreenshot && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5 ml-auto"
-              onClick={onClearScreenshot}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          )}
+          <ChatFileUpload
+            onFilesSelected={handleFilesSelected}
+            disabled={disabled}
+          />
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          {onModeChange && (
+            <ModeToggle
+              mode={mode}
+              onModeChange={onModeChange}
+              disabled={disabled}
+            />
+          )}
+          <span className="text-xs text-muted-foreground">
+            {mode === "chat" ? "Planning" : "Executing"}
+          </span>
+        </div>
+      </div>
+
+      {/* Attachments Preview */}
+      <AttachmentsPreview
+        attachments={attachments}
+        onRemove={handleRemoveAttachment}
+      />
       
-      <div className="flex gap-2">
+      {/* Input Area */}
+      <div className="flex gap-2 p-4">
         <Textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={
-            pendingScreenshot
-              ? "Describe what you want to change in this screenshot..."
+            attachments.length > 0
+              ? "Describe what you want to do with these attachments..."
               : mode === "chat"
               ? "Ask questions or discuss your plans..."
               : "Describe what you want to build..."
