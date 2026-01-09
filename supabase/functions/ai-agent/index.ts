@@ -1398,7 +1398,25 @@ async function executeTool(
     }
 
     case 'vercel_create_project': {
-      const { name, repo, framework = 'vite' } = args;
+      let { name, repo, framework } = args;
+      
+      // Auto-detect framework from cached package.json if not specified
+      if (!framework && context.packageJson) {
+        const deps = {
+          ...context.packageJson.dependencies,
+          ...context.packageJson.devDependencies
+        };
+        if (deps['next']) framework = 'nextjs';
+        else if (deps['vite']) framework = 'vite';
+        else if (deps['gatsby']) framework = 'gatsby';
+        else if (deps['nuxt']) framework = 'nuxt';
+        else if (deps['svelte']) framework = 'svelte';
+        else if (deps['vue']) framework = 'vue';
+        else framework = 'vite'; // Default
+        console.log(`[vercel_create_project] Auto-detected framework: ${framework}`);
+      } else if (!framework) {
+        framework = 'vite';
+      }
       
       let repoPath = repo;
       const match = repo.match(/github\.com[\/:]([^\/]+)\/([^\/\.]+)/);
