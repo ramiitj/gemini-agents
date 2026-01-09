@@ -2652,12 +2652,22 @@ You help users find information on the web by searching Google and providing com
         await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, toolContext, mode);
       }
 
+      // Return structured grounding metadata for the frontend
       return new Response(
         JSON.stringify({ 
           response: responseText,
           success: true,
           mode: 'web_search',
-          groundingMetadata
+          groundingMetadata: {
+            groundingChunks: groundingChunks.map((chunk: any) => ({
+              web: {
+                uri: chunk.web?.uri,
+                title: chunk.web?.title
+              }
+            })),
+            webSearchQueries: groundingMetadata?.webSearchQueries || [],
+            searchEntryPoint: groundingMetadata?.searchEntryPoint
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

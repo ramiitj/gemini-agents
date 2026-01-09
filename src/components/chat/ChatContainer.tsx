@@ -5,9 +5,10 @@ import { useConversation } from "@/hooks/useConversation";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useAgentActivity } from "@/hooks/useAgentActivity";
 import { Skeleton } from "@/components/ui/skeleton";
-import { GitBranch, FileCode } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { GitBranch, FileCode, Pin, X } from "lucide-react";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
-import type { FileAttachment, SearchAttachment, AgentMode } from "@/types/search";
+import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata } from "@/types/search";
 
 export interface Message {
   id: string;
@@ -19,6 +20,8 @@ export interface Message {
     diff: string;
   }[];
   status?: "pending" | "complete" | "error";
+  mode?: AgentMode;
+  groundingMetadata?: GroundingMetadata;
 }
 
 export interface VisualContext {
@@ -46,13 +49,33 @@ const ChatContainer = ({
   const { messages, isLoading, isSending, sendMessage, conversation } = useConversation(projectId);
   const { session, loading: sessionLoading, updateMode } = useAgentSession(projectId);
   const { activities, clearActivities } = useAgentActivity(projectId, conversation?.id);
+  const [pinnedResults, setPinnedResults] = useState<SearchAttachment[]>([]);
 
   // Default to "execution" mode, only use session mode after it loads
   const mode: AgentMode = sessionLoading ? "execution" : (session?.agent_mode as AgentMode) || "execution";
 
+  const handlePinResult = (result: SearchAttachment) => {
+    setPinnedResults(prev => {
+      const exists = prev.some(p => p.url === result.url);
+      if (exists) {
+        return prev.filter(p => p.url !== result.url);
+      }
+      return [...prev, result];
+    });
+  };
+
+  const unpinResult = (index: number) => {
+    setPinnedResults(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const pinnedUrls = pinnedResults.map(r => r.url).filter(Boolean) as string[];
+
   const handleSend = (content: string, attachments?: FileAttachment[], context?: VisualContext) => {
     if (sessionLoading) return;
     clearActivities();
+    
+    // Combine searchContext with pinned results
+    const combinedSearchContext = [...(searchContext || []), ...pinnedResults];
     
     // Pass raw attachments and search context to sendMessage - backend handles formatting
     sendMessage(
@@ -61,7 +84,7 @@ const ChatContainer = ({
       context?.element, 
       mode,
       attachments,
-      searchContext
+      combinedSearchContext.length > 0 ? combinedSearchContext : undefined
     );
   };
 
@@ -112,7 +135,37 @@ const ChatContainer = ({
         </div>
       )}
       
-      <MessageList messages={messages} isTyping={isSending} activities={activities} />
+      <MessageList 
+        messages={messages} 
+        isTyping={isSending} 
+        activities={activities}
+        onPinResult={handlePinResult}
+        pinnedUrls={pinnedUrls}
+      />
+
+      {/* Pinned results bar */}
+      {pinnedResults.length > 0 && (
+        <div className="border-t border-border px-4 py-2 bg-accent/30">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+            <Pin className="h-3 w-3" />
+            Pinned sources ({pinnedResults.length})
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {pinnedResults.map((r, i) => (
+              <Badge key={i} variant="secondary" className="flex items-center gap-1 pr-1">
+                <span className="max-w-32 truncate">{r.title}</span>
+                <button 
+                  onClick={() => unpinResult(i)}
+                  className="ml-1 rounded-full hover:bg-muted p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
       <ChatInput 
         onSend={(content, attachments) => handleSend(content, attachments)} 
         previewUrl={previewUrl}
