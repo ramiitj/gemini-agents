@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useContext } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 
@@ -13,6 +13,7 @@ interface UseUserRoleResult {
 }
 
 export function useUserRole(organizationId: string | null | undefined): UseUserRoleResult {
+  // Safely get auth - will throw if not in AuthProvider
   const { user } = useAuth();
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
