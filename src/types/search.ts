@@ -1,3 +1,5 @@
+export type AgentMode = "chat" | "execution" | "web_search";
+
 export interface SearchAttachment {
   type: 'code' | 'doc' | 'link' | 'image' | 'video';
   title: string;

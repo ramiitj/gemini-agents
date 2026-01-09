@@ -1,9 +1,10 @@
-import { MessageSquare, Zap } from "lucide-react";
+import { MessageSquare, Zap, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { AgentMode } from "@/types/search";
 
 interface ModeToggleProps {
-  mode: "chat" | "execution";
-  onModeChange: (mode: "chat" | "execution") => void;
+  mode: AgentMode;
+  onModeChange: (mode: AgentMode) => void;
   disabled?: boolean;
 }
 
@@ -35,6 +36,19 @@ const ModeToggle = ({ mode, onModeChange, disabled }: ModeToggleProps) => {
       >
         <Zap className="h-3.5 w-3.5" />
         Execute
+      </button>
+      <button
+        onClick={() => onModeChange("web_search")}
+        disabled={disabled}
+        className={cn(
+          "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+          mode === "web_search"
+            ? "bg-blue-500 text-white shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        <Globe className="h-3.5 w-3.5" />
+        Search
       </button>
     </div>
   );

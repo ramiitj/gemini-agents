@@ -7,7 +7,7 @@ import { useAgentActivity } from "@/hooks/useAgentActivity";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GitBranch, FileCode } from "lucide-react";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
-import type { FileAttachment, SearchAttachment } from "@/types/search";
+import type { FileAttachment, SearchAttachment, AgentMode } from "@/types/search";
 
 export interface Message {
   id: string;
@@ -48,7 +48,7 @@ const ChatContainer = ({
   const { activities, clearActivities } = useAgentActivity(projectId, conversation?.id);
 
   // Default to "execution" mode, only use session mode after it loads
-  const mode = sessionLoading ? "execution" : (session?.agent_mode as "chat" | "execution") || "execution";
+  const mode: AgentMode = sessionLoading ? "execution" : (session?.agent_mode as AgentMode) || "execution";
 
   const handleSend = (content: string, attachments?: FileAttachment[], context?: VisualContext) => {
     if (sessionLoading) return;
@@ -65,7 +65,7 @@ const ChatContainer = ({
     );
   };
 
-  const handleModeChange = (newMode: "chat" | "execution") => {
+  const handleModeChange = (newMode: AgentMode) => {
     updateMode(newMode);
   };
 

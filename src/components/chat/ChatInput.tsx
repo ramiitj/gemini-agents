@@ -6,15 +6,15 @@ import ModeToggle from "./ModeToggle";
 import ChatScreenshotButton from "./ChatScreenshotButton";
 import ChatFileUpload from "./ChatFileUpload";
 import AttachmentsPreview from "./AttachmentsPreview";
-import type { FileAttachment } from "@/types/search";
+import type { FileAttachment, AgentMode } from "@/types/search";
 
 interface ChatInputProps {
   onSend: (content: string, attachments?: FileAttachment[]) => void;
   previewUrl?: string | null;
   disabled?: boolean;
   sessionLoading?: boolean;
-  mode?: "chat" | "execution";
-  onModeChange?: (mode: "chat" | "execution") => void;
+  mode?: AgentMode;
+  onModeChange?: (mode: AgentMode) => void;
 }
 
 const ChatInput = ({ 
@@ -85,7 +85,7 @@ const ChatInput = ({
             />
           )}
           <span className="text-xs text-muted-foreground">
-            {mode === "chat" ? "Planning" : "Executing"}
+            {mode === "web_search" ? "Searching" : mode === "chat" ? "Planning" : "Executing"}
           </span>
         </div>
       </div>
@@ -105,6 +105,8 @@ const ChatInput = ({
           placeholder={
             attachments.length > 0
               ? "Describe what you want to do with these attachments..."
+              : mode === "web_search"
+              ? "Search the web for images, articles, or information..."
               : mode === "chat"
               ? "Ask questions or discuss your plans..."
               : "Describe what you want to build..."

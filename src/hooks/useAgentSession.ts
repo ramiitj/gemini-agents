@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { AgentMode } from "@/types/search";
 
 export interface AgentSession {
   id: string;
@@ -10,7 +11,7 @@ export interface AgentSession {
   current_branch: string | null;
   staged_files: Record<string, { original: string; modified: string }>;
   vercel_project_id: string | null;
-  agent_mode: "chat" | "execution";
+  agent_mode: AgentMode;
   created_at: string;
   updated_at: string;
 }
@@ -100,7 +101,7 @@ export function useAgentSession(projectId: string | undefined) {
     };
   }, [projectId, fetchSession]);
 
-  const updateMode = useCallback(async (mode: "chat" | "execution") => {
+  const updateMode = useCallback(async (mode: AgentMode) => {
     if (!projectId) return;
 
     const { data: { user } } = await supabase.auth.getUser();
