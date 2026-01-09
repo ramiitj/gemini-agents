@@ -35,13 +35,14 @@ interface ChatContainerProps {
 const ChatContainer = ({ projectId, githubRepo, visualContext, onVisualContextHandled }: ChatContainerProps) => {
   const { messages, isLoading, isSending, sendMessage, conversation } = useConversation(projectId);
   const { session, loading: sessionLoading, updateMode } = useAgentSession(projectId);
-  const { activities } = useAgentActivity(projectId, conversation?.id);
+  const { activities, clearActivities } = useAgentActivity(projectId, conversation?.id);
 
   // Default to "execution" mode, only use session mode after it loads
   const mode = sessionLoading ? "execution" : (session?.agent_mode as "chat" | "execution") || "execution";
 
   const handleSend = (content: string, context?: VisualContext) => {
     if (sessionLoading) return; // Don't send until session loaded
+    clearActivities(); // Clear old activities before sending new message
     sendMessage(content, githubRepo || undefined, context?.element, mode);
   };
 

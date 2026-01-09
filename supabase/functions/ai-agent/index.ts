@@ -902,6 +902,12 @@ async function executeTool(
       
       const { owner, repo, branch } = context.currentRepo;
       
+      // Emit activity: writing
+      if (context.supabaseUrl && context.supabaseKey && context.projectId) {
+        await emitActivity(context.supabaseUrl, context.supabaseKey, context.projectId, 
+          context.conversationId, 'writing', 'in_progress', { file: file_path });
+      }
+      
       // Get original content for diff
       let originalContent = '';
       try {
@@ -919,6 +925,12 @@ async function executeTool(
       
       // Generate commit message
       const msg = commit_message || `Update ${file_path}`;
+      
+      // Emit activity: pushing
+      if (context.supabaseUrl && context.supabaseKey && context.projectId) {
+        await emitActivity(context.supabaseUrl, context.supabaseKey, context.projectId,
+          context.conversationId, 'pushing', 'in_progress', { file: file_path });
+      }
       
       // ATOMIC PUSH TO GITHUB
       console.log(`[file_write] Atomic push: ${file_path} to ${branch}`);
@@ -969,6 +981,12 @@ async function executeTool(
         } catch (e) {
           console.error('Failed to store code change:', e);
         }
+      }
+      
+      // Emit activity: pushing complete
+      if (context.supabaseUrl && context.supabaseKey && context.projectId) {
+        await emitActivity(context.supabaseUrl, context.supabaseKey, context.projectId,
+          context.conversationId, 'pushing', 'complete', { file: file_path, commitSha: pushResult.commitSha });
       }
       
       return { 
@@ -1100,6 +1118,12 @@ async function executeTool(
         return { result: { error: 'No repository cloned. Use github_clone_repo first.' }, context };
       }
       
+      // Emit activity: analyzing
+      if (context.supabaseUrl && context.supabaseKey && context.projectId) {
+        await emitActivity(context.supabaseUrl, context.supabaseKey, context.projectId,
+          context.conversationId, 'analyzing', 'in_progress', { file: file_path });
+      }
+      
       const { owner, repo, branch } = context.currentRepo;
       
       // Get file content
@@ -1156,6 +1180,16 @@ async function executeTool(
         }
       }
       
+      // Emit activity: analyzing complete
+      if (context.supabaseUrl && context.supabaseKey && context.projectId) {
+        await emitActivity(context.supabaseUrl, context.supabaseKey, context.projectId,
+          context.conversationId, 'analyzing', 'complete', { 
+            file: file_path, 
+            missing: missing.length,
+            found: found.length
+          });
+      }
+      
       return {
         result: {
           file: file_path,
@@ -1176,6 +1210,12 @@ async function executeTool(
       
       if (!context.currentRepo) {
         return { result: { error: 'No repository cloned. Use github_clone_repo first.' }, context };
+      }
+      
+      // Emit activity: writing package.json
+      if (context.supabaseUrl && context.supabaseKey && context.projectId) {
+        await emitActivity(context.supabaseUrl, context.supabaseKey, context.projectId,
+          context.conversationId, 'writing', 'in_progress', { file: 'package.json', package: package_name });
       }
       
       const { owner, repo, branch } = context.currentRepo;
@@ -1240,6 +1280,12 @@ async function executeTool(
       
       // Update cached package.json
       context.packageJson = pkg;
+      
+      // Emit activity: pushing complete
+      if (context.supabaseUrl && context.supabaseKey && context.projectId) {
+        await emitActivity(context.supabaseUrl, context.supabaseKey, context.projectId,
+          context.conversationId, 'pushing', 'complete', { file: 'package.json', package: package_name });
+      }
       
       return {
         result: {
@@ -2100,52 +2146,118 @@ BLOCKED actions (do NOT attempt these - tell user to switch to Execute mode):
 
 START by cloning the repo if not already done, then analyze code and discuss plans.
 If the user asks to make changes, explain what you WOULD do and ask them to switch to Execute mode.`
-      : `## EXECUTION MODE - FULL AUTONOMOUS ACCESS
+      : `## EXECUTION MODE - MANDATORY AUTONOMOUS WORKFLOW
 
-You are a fully autonomous AI coding agent with complete tool access.
+**YOU ARE A FULLY AUTONOMOUS AI CODING AGENT.**
 
-### CRITICAL: AUTONOMOUS WORKFLOW
+Your mission: Execute the user's request completely and verify success - WITHOUT asking for permission.
 
-**BEFORE writing any file with new imports:**
-1. Use \`analyze_dependencies\` to check if packages are installed
-2. If missing packages found, use \`add_dependency\` FIRST
-3. Then use \`file_write\` (which pushes directly to GitHub)
+---
 
-**AFTER making changes:**
-1. Use \`autonomous_deploy_and_verify\` to deploy and auto-fix errors
-2. This tool will:
-   - Deploy to Vercel
-   - Monitor build status
-   - If build fails: read logs, identify error, auto-fix, redeploy
-   - Repeat until success or max retries
-   - Take screenshot to verify success
+## CRITICAL RULES - VIOLATIONS ARE FORBIDDEN
 
-**file_write BEHAVIOR:**
-- Each file_write IMMEDIATELY pushes to GitHub (atomic commit)
-- Vercel auto-deploys from GitHub
-- No need for separate git_add_commit_push for single files
+### Rule 1: NEVER use vercel_trigger_deployment directly
+- ALWAYS use \`autonomous_deploy_and_verify\` instead
+- This tool handles the full deploy → verify → fix → retry → screenshot loop
+- Direct deployment calls are BLOCKED in execution mode
 
-**COMMON WORKFLOW:**
+### Rule 2: NEVER return to user before deployment verification
+- You MUST wait for build success or max retries exhausted
+- Report final status with deployment URL
+- No partial completions allowed
+
+### Rule 3: ALWAYS check dependencies before writing code with new imports
+- \`analyze_dependencies\` FIRST on any file with new imports
+- \`add_dependency\` for missing packages BEFORE file_write
+- THEN write the code
+
+### Rule 4: NEVER ask user for branch names or configuration
+- Branches are auto-assigned (user/{id})
+- Vercel project ID is pre-configured
+- Just execute using context values
+
+---
+
+## MANDATORY EXECUTION SEQUENCE
+
+For ANY code change request, execute EXACTLY this sequence:
+
 \`\`\`
-1. Clone repo (if needed)
-2. Read package.json and relevant files
-3. analyze_dependencies on any file with new imports
-4. add_dependency for any missing packages
-5. file_write to make code changes (auto-pushes)
-6. autonomous_deploy_and_verify to deploy and verify
+STEP 1: PREPARE
+├─ Clone repo if not already done (github_clone_repo)
+├─ Read package.json to understand project dependencies
+└─ Read relevant source files you'll modify
+
+STEP 2: ANALYZE DEPENDENCIES
+├─ For each file with NEW imports, run analyze_dependencies
+├─ If missing packages found → add_dependency FIRST
+└─ DO NOT skip this step
+
+STEP 3: WRITE CODE
+├─ Use file_write (auto-commits and pushes to GitHub)
+├─ Make minimal, focused changes
+└─ Each file_write = immediate commit to your branch
+
+STEP 4: DEPLOY AND VERIFY (MANDATORY FINAL STEP)
+├─ Call autonomous_deploy_and_verify as your LAST action
+├─ This handles: deploy → poll status → auto-fix → retry → screenshot
+└─ Wait for it to complete fully before responding
+
+STEP 5: REPORT TO USER
+├─ Only respond AFTER autonomous_deploy_and_verify completes
+├─ Include: deployment URL, success/failure status
+└─ If failed after retries: explain what was attempted
 \`\`\`
 
-**IF BUILD FAILS:**
-- get_build_logs to see the error
-- The logs will include parsedError with actionable insights
-- Fix the issue (missing module? add_dependency. Syntax? fix the file)
-- file_write the fix (auto-pushes)
-- Redeploy
+---
 
-**Current staged files: ${stagedFilesCount}**
+## FORBIDDEN ACTIONS
+
+❌ \`vercel_trigger_deployment\` directly (use autonomous_deploy_and_verify)
+❌ Returning before deployment verification
+❌ Writing files with new imports without checking dependencies
+❌ Asking user for branch names, project IDs, or confirmation
+❌ Skipping the deployment verification step
+
+---
+
+## AUTONOMOUS ERROR RECOVERY
+
+\`autonomous_deploy_and_verify\` automatically handles:
+1. Triggers deployment to Vercel
+2. Polls for build status every 15 seconds
+3. On build failure: fetches logs, parses error type
+4. Auto-fixes missing modules with add_dependency
+5. Retriggers deployment (up to 5 attempts)
+6. Takes screenshot on success
+
+**YOU DO NOT MANUALLY HANDLE BUILD FAILURES.**
+Just call autonomous_deploy_and_verify and let it work autonomously.
+
+---
+
+## EXAMPLE EXECUTION
+
+User: "Add a date picker using react-datepicker"
+
+Your actions (in order):
+1. github_clone_repo (if not done)
+2. file_read package.json and relevant component
+3. analyze_dependencies on the file you'll modify
+4. add_dependency react-datepicker
+5. file_write the component with DatePicker integration
+6. autonomous_deploy_and_verify (MANDATORY - wait for completion)
+7. Respond with "Done! Deployment successful at https://..."
+
+---
+
+**REMEMBER: You are AUTONOMOUS. Execute fully. Verify completely. Report honestly.**
+**Do not ask for permission. Do not skip verification. Do not return partial work.**
+
+Current staged files: ${stagedFilesCount}
 ${stagedFilesCount > 0 
-  ? `Files tracked locally:\n${stagedFilesList.map(f => `  - ${f}`).join('\n')}`
-  : '(none - file_write pushes immediately now)'}`;
+  ? 'Files tracked locally:\\n' + stagedFilesList.map(f => '  - ' + f).join('\\n')
+  : '(none - file_write pushes immediately)'}`;
 
     const systemPrompt = `You are an AUTONOMOUS AI coding agent for Product Compass. You translate natural language requests into precise code changes, handle dependencies, deploy previews, and auto-fix build errors.
 
@@ -2317,9 +2429,11 @@ User Request: ${message}`;
       { role: 'user', parts: [{ text: userMessage }] }
     ];
 
+    // In execution mode, filter out vercel_trigger_deployment to force use of autonomous_deploy_and_verify
+    const executionBlockedTools = ['vercel_trigger_deployment'];
     const activeTools = mode === 'chat'
       ? toolDefinitions.filter(t => chatModeTools.includes(t.name))
-      : toolDefinitions;
+      : toolDefinitions.filter(t => !executionBlockedTools.includes(t.name));
     
     console.log(`Mode: ${mode}, Active tools: ${activeTools.length}`);
 
