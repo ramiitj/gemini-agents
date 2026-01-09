@@ -2031,12 +2031,12 @@ async function executeTool(
 
     case 'web_search': {
       const { query, search_type = 'all', num_results = 5 } = args;
-      await emit('searching', 'in_progress', { query });
+      console.log(`Web search: "${query}" (type: ${search_type})`);
       
       try {
         // Use Google Custom Search API (free tier: 100 queries/day)
         const apiKey = Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('GOOGLE_SEARCH_API_KEY');
-        const searchEngineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID') || 'b1c8e9f1c8e9f1c8e'; // Default public CSE
+        const searchEngineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID') || 'b1c8e9f1c8e9f1c8e';
         
         let searchUrl = `https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(query)}&num=${Math.min(num_results, 10)}`;
         if (apiKey) searchUrl += `&key=${apiKey}`;
@@ -2053,12 +2053,13 @@ async function executeTool(
           thumbnail: item.pagemap?.cse_thumbnail?.[0]?.src
         }));
         
-        await emit('searching', 'complete', { resultsCount: results.length });
+        console.log(`Web search found ${results.length} results`);
         return {
           result: { query, search_type, results_count: results.length, results },
           context
         };
       } catch (err: any) {
+        console.error(`Web search error: ${err.message}`);
         return { result: { error: `Search failed: ${err.message}`, query }, context };
       }
     }
