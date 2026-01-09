@@ -121,14 +121,14 @@ const toolDefinitions = [
   },
   {
     name: 'vercel_trigger_deployment',
-    description: 'Trigger a new Vercel deployment for a project',
+    description: 'Deploy existing code to Vercel. Uses context automatically - NO arguments needed. Just call with empty args.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        project_id: { type: 'STRING', description: 'Vercel project ID' },
-        branch: { type: 'STRING', description: 'Git branch to deploy' }
+        project_id: { type: 'STRING', description: 'Optional - uses context if not provided' },
+        branch: { type: 'STRING', description: 'Optional - uses current branch if not provided' }
       },
-      required: ['project_id', 'branch']
+      required: []
     }
   },
   {
