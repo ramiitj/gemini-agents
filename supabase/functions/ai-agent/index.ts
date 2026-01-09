@@ -517,6 +517,9 @@ interface ToolContext {
   conversationId?: string;
   userId?: string;
   packageJson?: any; // Cached package.json
+  // For activity tracking
+  supabaseUrl?: string;
+  supabaseKey?: string;
 }
 
 // Load agent session from database
@@ -620,6 +623,38 @@ async function saveAgentSession(
     }
   } catch (e) {
     console.error('Failed to save agent session:', e);
+  }
+}
+
+// Emit real-time activity status for UI
+async function emitActivity(
+  supabaseUrl: string,
+  supabaseKey: string,
+  projectId: string,
+  conversationId: string | undefined,
+  activityType: string,
+  status: 'in_progress' | 'complete' | 'error',
+  details?: Record<string, any>
+): Promise<void> {
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/agent_activity`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'apikey': supabaseKey,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({
+        project_id: projectId,
+        conversation_id: conversationId || null,
+        activity_type: activityType,
+        status,
+        details: details || null
+      })
+    });
+  } catch (e) {
+    console.error('Failed to emit activity:', e);
   }
 }
 
@@ -1750,6 +1785,21 @@ async function executeTool(
     case 'autonomous_deploy_and_verify': {
       const { max_retries = 5 } = args;
       
+      // Helper to emit activity
+      const emit = async (type: string, status: 'in_progress' | 'complete' | 'error', details?: Record<string, any>) => {
+        if (context.supabaseUrl && context.supabaseKey && context.projectId) {
+          await emitActivity(
+            context.supabaseUrl,
+            context.supabaseKey,
+            context.projectId,
+            context.conversationId,
+            type,
+            status,
+            details
+          );
+        }
+      };
+      
       if (!context.lastVercelProjectId) {
         return { 
           result: { error: 'No Vercel project configured. Use vercel_create_project first.' }, 
@@ -1758,6 +1808,9 @@ async function executeTool(
       }
       
       const branchToUse = context.currentRepo?.branch || 'main';
+      
+      // Emit deploying status
+      await emit('deploying', 'in_progress', { attempt: 1, maxAttempts: max_retries });
       
       // Trigger initial deployment
       const { result: deployResult, context: ctx1 } = await executeTool(
@@ -1768,6 +1821,7 @@ async function executeTool(
       context = ctx1;
       
       if (deployResult.error) {
+        await emit('deploying', 'error', { error: deployResult.error });
         return { result: { error: `Deployment trigger failed: ${deployResult.error}` }, context };
       }
       
@@ -1781,6 +1835,8 @@ async function executeTool(
         // Wait for build
         await new Promise(resolve => setTimeout(resolve, 15000));
         
+        await emit('checking_logs', 'in_progress');
+        
         const { result: statusResult, context: ctx2 } = await executeTool(
           'vercel_get_deployment_status',
           { deployment_id: deploymentId },
@@ -1791,9 +1847,11 @@ async function executeTool(
         lastStatus = statusResult.status;
         
         if (statusResult.ready) {
+          await emit('checking_logs', 'complete');
           finalUrl = statusResult.url;
           
           // Take verification screenshot
+          await emit('screenshot', 'in_progress');
           let screenshot = null;
           if (finalUrl) {
             try {
@@ -1803,10 +1861,14 @@ async function executeTool(
                 context
               );
               screenshot = ssResult.screenshot_base64 ? 'captured' : null;
+              await emit('screenshot', 'complete');
             } catch (e) {
               console.error('Screenshot failed:', e);
+              await emit('screenshot', 'error');
             }
           }
+          
+          await emit('complete', 'complete', { message: `Deployment successful! Preview: https://${finalUrl}` });
           
           return {
             result: {
@@ -1824,11 +1886,13 @@ async function executeTool(
         
         if (statusResult.error && statusResult.parsedError) {
           attempt++;
+          await emit('checking_logs', 'complete');
           console.log(`[autonomous_deploy] Build failed, attempt ${attempt}/${max_retries}`);
           console.log(`[autonomous_deploy] Error: ${statusResult.parsedError.message}`);
           
           // Attempt auto-fix based on error type
           if (statusResult.parsedError.type === 'missing_module' && statusResult.parsedError.module) {
+            await emit('fixing', 'in_progress', { error: `Missing module: ${statusResult.parsedError.module}` });
             console.log(`[autonomous_deploy] Auto-fixing: adding ${statusResult.parsedError.module}`);
             const { result: addResult, context: ctx3 } = await executeTool(
               'add_dependency',
@@ -1838,7 +1902,13 @@ async function executeTool(
             context = ctx3;
             
             if (addResult.added) {
+              await emit('fixing', 'complete', { message: `Added ${statusResult.parsedError.module}` });
+              await emit('pushing', 'in_progress');
+              // Emit pushing status is implicit in add_dependency, so mark complete
+              await emit('pushing', 'complete');
+              
               // Re-trigger deployment
+              await emit('deploying', 'in_progress', { attempt: attempt + 1, maxAttempts: max_retries });
               const { result: redeployResult, context: ctx4 } = await executeTool(
                 'vercel_trigger_deployment',
                 { project_id: context.lastVercelProjectId, branch: branchToUse },
@@ -1850,10 +1920,13 @@ async function executeTool(
                 // Continue monitoring new deployment
                 continue;
               }
+            } else {
+              await emit('fixing', 'error', { error: 'Failed to add dependency' });
             }
           }
           
           // For other errors, we need AI intervention
+          await emit('complete', 'error', { error: statusResult.parsedError.message });
           return {
             result: {
               success: false,
@@ -1877,6 +1950,7 @@ async function executeTool(
         }
       }
       
+      await emit('complete', 'error', { error: `Deployment did not complete after ${max_retries} attempts` });
       return {
         result: {
           success: false,
@@ -1964,7 +2038,9 @@ serve(async (req) => {
       stagedFiles: existingSession?.staged_files || {},
       projectId,
       conversationId,
-      userId
+      userId,
+      supabaseUrl,
+      supabaseKey
     };
     
     if (existingSession?.github_owner && existingSession?.github_repo) {

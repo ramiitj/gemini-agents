@@ -3,6 +3,7 @@ import MessageList from "./MessageList";
 import ChatInput from "./ChatInput";
 import { useConversation } from "@/hooks/useConversation";
 import { useAgentSession } from "@/hooks/useAgentSession";
+import { useAgentActivity } from "@/hooks/useAgentActivity";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GitBranch, FileCode } from "lucide-react";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
@@ -32,8 +33,9 @@ interface ChatContainerProps {
 }
 
 const ChatContainer = ({ projectId, githubRepo, visualContext, onVisualContextHandled }: ChatContainerProps) => {
-  const { messages, isLoading, isSending, sendMessage } = useConversation(projectId);
+  const { messages, isLoading, isSending, sendMessage, conversation } = useConversation(projectId);
   const { session, loading: sessionLoading, updateMode } = useAgentSession(projectId);
+  const { activities } = useAgentActivity(projectId, conversation?.id);
 
   // Default to "execution" mode, only use session mode after it loads
   const mode = sessionLoading ? "execution" : (session?.agent_mode as "chat" | "execution") || "execution";
@@ -90,7 +92,7 @@ const ChatContainer = ({ projectId, githubRepo, visualContext, onVisualContextHa
         </div>
       )}
       
-      <MessageList messages={messages} isTyping={isSending} />
+      <MessageList messages={messages} isTyping={isSending} activities={activities} />
       <ChatInput 
         onSend={(content) => handleSend(content)} 
         disabled={isSending}

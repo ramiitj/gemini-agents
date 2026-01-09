@@ -59,6 +59,39 @@ export type Database = {
           },
         ]
       }
+      agent_activity: {
+        Row: {
+          activity_type: string
+          conversation_id: string | null
+          created_at: string | null
+          details: Json | null
+          id: string
+          project_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          activity_type: string
+          conversation_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          project_id: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          activity_type?: string
+          conversation_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          project_id?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       agent_runs: {
         Row: {
           conversation_id: string | null
