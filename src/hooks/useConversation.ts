@@ -237,31 +237,32 @@ export function useConversation(projectId: string | undefined) {
 
       if (aiError) throw aiError;
 
-      // For web search mode, add grounding metadata to the response message
-      const responseMessage: Message = {
-        id: `ai-${Date.now()}`,
-        role: 'assistant',
-        content: aiResponse.response || 'I apologize, but I encountered an issue processing your request.',
-        timestamp: new Date(),
-        status: aiResponse.success ? 'complete' : 'error',
-        mode: aiResponse.mode,
-        groundingMetadata: aiResponse.groundingMetadata
-      };
-
-      // Add the AI response message with metadata
-      setMessages(prev => [...prev, responseMessage]);
-
-      // Save AI response to database (without metadata for now - would need schema update)
-      const { error: aiMsgError } = await supabase
+      // Save AI response to database first to get real ID
+      const { data: savedAiMsg, error: aiMsgError } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversation.id,
           role: 'assistant',
           content: aiResponse.response || 'I apologize, but I encountered an issue processing your request.',
           status: aiResponse.success ? 'complete' : 'error'
-        });
+        })
+        .select()
+        .single();
 
       if (aiMsgError) throw aiMsgError;
+
+      // Add AI response with the real database ID (realtime will skip due to duplicate check)
+      const responseMessage: Message = {
+        id: savedAiMsg.id,
+        role: 'assistant',
+        content: aiResponse.response || 'I apologize, but I encountered an issue processing your request.',
+        timestamp: new Date(savedAiMsg.created_at),
+        status: aiResponse.success ? 'complete' : 'error',
+        mode: aiResponse.mode,
+        groundingMetadata: aiResponse.groundingMetadata
+      };
+
+      setMessages(prev => [...prev, responseMessage]);
 
     } catch (error: any) {
       console.error('Error sending message:', error);
