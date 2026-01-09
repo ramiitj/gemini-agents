@@ -1,6 +1,7 @@
-import { Search } from "lucide-react";
+import { Search, Pin } from "lucide-react";
 import type { GroundingChunk, SearchAttachment } from "@/types/search";
 import SearchResultCard from "./SearchResultCard";
+import { cn } from "@/lib/utils";
 
 interface SearchResultsPanelProps {
   chunks: GroundingChunk[];
@@ -25,14 +26,17 @@ export default function SearchResultsPanel({
 }: SearchResultsPanelProps) {
   if (!chunks || chunks.length === 0) return null;
 
-  const handlePin = (chunk: GroundingChunk) => {
+  const handlePin = (chunk: GroundingChunk, snippet?: string) => {
     if (!onPinResult || !chunk.web?.uri) return;
     
+    const url = chunk.web.uri;
+    const title = chunk.web.title || 'Source';
+    
     onPinResult({
-      type: inferResultType(chunk.web.uri),
-      title: chunk.web.title || 'Source',
-      url: chunk.web.uri,
-      snippet: undefined
+      type: inferResultType(url),
+      title: title,
+      url: url,
+      snippet: snippet || title // Use snippet if available, fallback to title
     });
   };
 
@@ -47,6 +51,15 @@ export default function SearchResultsPanel({
         {searchQueries && searchQueries.length > 0 && (
           <span className="text-xs text-muted-foreground/60 ml-2">
             &ldquo;{searchQueries[0]}&rdquo;
+          </span>
+        )}
+        {pinnedUrls.length > 0 && (
+          <span className={cn(
+            "ml-auto flex items-center gap-1 text-xs px-2 py-0.5 rounded-full",
+            "bg-primary/10 text-primary"
+          )}>
+            <Pin className="h-3 w-3" />
+            {pinnedUrls.length} pinned
           </span>
         )}
       </div>
@@ -65,7 +78,7 @@ export default function SearchResultsPanel({
               title={title || 'Source'}
               url={url}
               type={inferResultType(url)}
-              onPin={() => handlePin(chunk)}
+              onPin={(snippet) => handlePin(chunk, snippet)}
               isPinned={pinnedUrls.includes(url)}
             />
           );

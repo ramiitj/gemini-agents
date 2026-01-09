@@ -1,4 +1,4 @@
-export type AgentMode = "chat" | "execution" | "web_search";
+export type AgentMode = "chat" | "execution" | "web_search" | "image_search";
 
 export interface SearchAttachment {
   type: 'code' | 'doc' | 'link' | 'image' | 'video';
@@ -35,4 +35,12 @@ export interface GroundingMetadata {
   searchEntryPoint?: {
     renderedContent?: string;
   };
+}
+
+export interface ImageSearchResult {
+  title: string;
+  link: string;
+  thumbnailLink: string;
+  contextLink: string;
+  displayLink: string;
 }

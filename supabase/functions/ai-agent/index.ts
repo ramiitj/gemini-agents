@@ -2737,6 +2737,134 @@ You help users find information on the web by searching Google and providing com
       );
     }
 
+    // Image Search Mode - Use Google Custom Search API with image type
+    if (mode === 'image_search') {
+      console.log('Image Search mode - using Google Custom Search API for images');
+      
+      // For image search, we'll use the Gemini model with web grounding
+      // but explicitly ask for image results
+      const imageSearchPrompt = `Search for images related to: "${message}"
+
+Please find and return relevant images with their URLs. For each image found, provide:
+1. Image title/description
+2. Direct image URL
+3. Source website URL
+4. Display domain
+
+Format your response as a JSON array of image results.`;
+
+      const searchMessages = [
+        { role: 'user', parts: [{ text: imageSearchPrompt }] }
+      ];
+      
+      const imageSearchSystemPrompt = `You are an image search assistant. When asked to find images, search the web and return results in a structured format.
+
+Your response MUST be valid JSON with this structure:
+{
+  "images": [
+    {
+      "title": "Image title or description",
+      "link": "Direct URL to the image file",
+      "thumbnailLink": "Thumbnail URL (use the same as link if not available)",
+      "contextLink": "URL of the page containing the image",
+      "displayLink": "Domain name (e.g., example.com)"
+    }
+  ],
+  "summary": "Brief description of what was found"
+}
+
+Search for high-quality, relevant images. Include diverse results from different sources.`;
+
+      const vertexUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectIdGoogle}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent`;
+      
+      const vertexResponse = await fetch(vertexUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: imageSearchSystemPrompt }]
+          },
+          contents: searchMessages,
+          tools: [{ google_search: {} }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 4096
+          }
+        })
+      });
+
+      const vertexData = await vertexResponse.json();
+      console.log('Image Search response:', JSON.stringify(vertexData).substring(0, 500));
+      
+      if (vertexData.error) {
+        throw new Error(`Vertex AI error: ${vertexData.error.message}`);
+      }
+
+      const candidate = vertexData.candidates?.[0];
+      if (!candidate) {
+        throw new Error('No response from Vertex AI');
+      }
+
+      let responseText = candidate.content?.parts?.[0]?.text || '';
+      const groundingMetadata = candidate.groundingMetadata;
+      const groundingChunks = groundingMetadata?.groundingChunks || [];
+
+      // Try to parse image results from response
+      let imageResults: any[] = [];
+      try {
+        // Try to extract JSON from the response
+        const jsonMatch = responseText.match(/\{[\s\S]*"images"[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          imageResults = parsed.images || [];
+        }
+      } catch (e) {
+        console.log('Could not parse image JSON, using grounding chunks');
+        // Fallback to grounding chunks for image-like results
+        imageResults = groundingChunks
+          .filter((chunk: any) => {
+            const url = chunk.web?.uri?.toLowerCase() || '';
+            return url.match(/\.(jpg|jpeg|png|gif|webp|svg)/) || 
+                   url.includes('image') ||
+                   url.includes('photo');
+          })
+          .map((chunk: any) => ({
+            title: chunk.web?.title || 'Image',
+            link: chunk.web?.uri,
+            thumbnailLink: chunk.web?.uri,
+            contextLink: chunk.web?.uri,
+            displayLink: new URL(chunk.web?.uri).hostname.replace('www.', '')
+          }));
+      }
+      
+      // Save session
+      if (supabaseUrl && supabaseKey && projectId && userId) {
+        await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, toolContext, mode);
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          response: responseText,
+          success: true,
+          mode: 'image_search',
+          imageResults,
+          groundingMetadata: {
+            groundingChunks: groundingChunks.map((chunk: any) => ({
+              web: {
+                uri: chunk.web?.uri,
+                title: chunk.web?.title
+              }
+            })),
+            webSearchQueries: groundingMetadata?.webSearchQueries || []
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // In execution mode, filter out vercel_trigger_deployment to force use of autonomous_deploy_and_verify
     const executionBlockedTools = ['vercel_trigger_deployment'];
     const activeTools = mode === 'chat'

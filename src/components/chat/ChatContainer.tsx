@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { GitBranch, FileCode, Pin, X } from "lucide-react";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
-import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata } from "@/types/search";
+import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata, ImageSearchResult } from "@/types/search";
 
 export interface Message {
   id: string;
@@ -22,6 +22,7 @@ export interface Message {
   status?: "pending" | "complete" | "error";
   mode?: AgentMode;
   groundingMetadata?: GroundingMetadata;
+  imageResults?: ImageSearchResult[];
 }
 
 export interface VisualContext {
@@ -49,7 +50,25 @@ const ChatContainer = ({
   const { messages, isLoading, isSending, sendMessage, conversation } = useConversation(projectId);
   const { session, loading: sessionLoading, updateMode } = useAgentSession(projectId);
   const { activities, clearActivities } = useAgentActivity(projectId, conversation?.id);
-  const [pinnedResults, setPinnedResults] = useState<SearchAttachment[]>([]);
+  
+  // Persist pinned results in sessionStorage
+  const [pinnedResults, setPinnedResults] = useState<SearchAttachment[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(`pinned-${projectId}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Save pinned results when they change
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(`pinned-${projectId}`, JSON.stringify(pinnedResults));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [pinnedResults, projectId]);
 
   // Default to "execution" mode, only use session mode after it loads
   const mode: AgentMode = sessionLoading ? "execution" : (session?.agent_mode as AgentMode) || "execution";

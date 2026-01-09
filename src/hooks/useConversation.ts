@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
-import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata } from "@/types/search";
+import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata, ImageSearchResult } from "@/types/search";
 
 interface Message {
   id: string;
@@ -17,6 +17,7 @@ interface Message {
   status?: "pending" | "complete" | "error";
   mode?: AgentMode;
   groundingMetadata?: GroundingMetadata;
+  imageResults?: ImageSearchResult[];
 }
 
 interface Conversation {
@@ -259,7 +260,8 @@ export function useConversation(projectId: string | undefined) {
         timestamp: new Date(savedAiMsg.created_at),
         status: aiResponse.success ? 'complete' : 'error',
         mode: aiResponse.mode,
-        groundingMetadata: aiResponse.groundingMetadata
+        groundingMetadata: aiResponse.groundingMetadata,
+        imageResults: aiResponse.imageResults
       };
 
       setMessages(prev => [...prev, responseMessage]);

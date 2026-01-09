@@ -4,8 +4,10 @@ import type { Message } from "./ChatContainer";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import SearchResultsPanel from "./SearchResultsPanel";
+import ImageResultsGrid from "./ImageResultsGrid";
 import type { SearchAttachment } from "@/types/search";
 import { parseMessageContent, MessageBlock } from "@/lib/message-parser";
+import { renderTextWithLinks } from "./LinkRenderer";
 import PhaseHeader from "./blocks/PhaseHeader";
 import SectionHeader from "./blocks/SectionHeader";
 import CodeBlockEnhanced from "./blocks/CodeBlockEnhanced";
@@ -104,7 +106,7 @@ function renderBlock(block: MessageBlock, index: number): React.ReactNode {
       if (!block.content.trim()) return null;
       return (
         <p key={index} className="text-sm whitespace-pre-wrap my-1">
-          {block.content}
+          {renderTextWithLinks(block.content)}
         </p>
       );
   }
@@ -122,7 +124,9 @@ const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
 
     const isUser = message.role === "user";
     const isWebSearch = message.mode === 'web_search';
+    const isImageSearch = message.mode === 'image_search';
     const hasGroundingData = (message.groundingMetadata?.groundingChunks?.length ?? 0) > 0;
+    const hasImageResults = (message.imageResults?.length ?? 0) > 0;
     
     // Parse assistant messages into structured blocks
     const blocks = !isUser ? parseMessageContent(message.content) : [];
@@ -194,6 +198,17 @@ const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
               onPinResult={onPinResult}
               pinnedUrls={pinnedUrls}
             />
+          )}
+
+          {/* Image results grid for image_search mode */}
+          {isImageSearch && hasImageResults && (
+            <div className="mt-4 border-t border-border/50 pt-3">
+              <ImageResultsGrid
+                images={message.imageResults!}
+                onSelectImage={onPinResult}
+                selectedUrls={pinnedUrls}
+              />
+            </div>
           )}
         </div>
       </div>
