@@ -282,6 +282,7 @@ export type Database = {
           commit_sha: string | null
           conversation_id: string | null
           created_at: string | null
+          created_by_name: string | null
           deletions: number | null
           diff_content: string | null
           file_path: string
@@ -291,6 +292,8 @@ export type Database = {
           original_content: string | null
           project_id: string
           status: string
+          version_label: string | null
+          version_number: number | null
         }
         Insert: {
           additions?: number | null
@@ -300,6 +303,7 @@ export type Database = {
           commit_sha?: string | null
           conversation_id?: string | null
           created_at?: string | null
+          created_by_name?: string | null
           deletions?: number | null
           diff_content?: string | null
           file_path: string
@@ -309,6 +313,8 @@ export type Database = {
           original_content?: string | null
           project_id: string
           status?: string
+          version_label?: string | null
+          version_number?: number | null
         }
         Update: {
           additions?: number | null
@@ -318,6 +324,7 @@ export type Database = {
           commit_sha?: string | null
           conversation_id?: string | null
           created_at?: string | null
+          created_by_name?: string | null
           deletions?: number | null
           diff_content?: string | null
           file_path?: string
@@ -327,6 +334,8 @@ export type Database = {
           original_content?: string | null
           project_id?: string
           status?: string
+          version_label?: string | null
+          version_number?: number | null
         }
         Relationships: []
       }
@@ -616,37 +625,43 @@ export type Database = {
       }
       team_comments: {
         Row: {
-          change_request_id: string
+          attachments: Json | null
+          change_request_id: string | null
           content: string
           created_at: string | null
           file_path: string | null
           id: string
           line_number: number | null
           parent_id: string | null
+          project_id: string | null
           quoted_text: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
-          change_request_id: string
+          attachments?: Json | null
+          change_request_id?: string | null
           content: string
           created_at?: string | null
           file_path?: string | null
           id?: string
           line_number?: number | null
           parent_id?: string | null
+          project_id?: string | null
           quoted_text?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
-          change_request_id?: string
+          attachments?: Json | null
+          change_request_id?: string | null
           content?: string
           created_at?: string | null
           file_path?: string | null
           id?: string
           line_number?: number | null
           parent_id?: string | null
+          project_id?: string | null
           quoted_text?: string | null
           updated_at?: string | null
           user_id?: string
@@ -664,6 +679,13 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "team_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_comments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
