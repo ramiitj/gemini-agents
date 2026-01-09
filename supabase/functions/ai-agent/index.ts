@@ -2573,6 +2573,12 @@ User Request: ${message}`;
     if (mode === 'web_search') {
       console.log('Web Search mode - using Google Search grounding');
       
+      // IMPORTANT: Only send the current user query - NOT the full history
+      // The full history contains execution mode prompts that confuse the model
+      const searchMessages = [
+        { role: 'user', parts: [{ text: message }] }
+      ];
+      
       const webSearchSystemPrompt = `You are a web search assistant with real-time access to Google Search.
 
 ## YOUR ROLE
@@ -2599,6 +2605,8 @@ You help users find information on the web by searching Google and providing com
 
       const vertexUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectIdGoogle}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent`;
       
+      console.log('Web Search request - query:', message);
+      
       const vertexResponse = await fetch(vertexUrl, {
         method: 'POST',
         headers: {
@@ -2609,8 +2617,8 @@ You help users find information on the web by searching Google and providing com
           systemInstruction: {
             parts: [{ text: webSearchSystemPrompt }]
           },
-          contents: messages,
-          tools: [{ googleSearch: {} }],  // Enable Google Search grounding
+          contents: searchMessages,  // Use clean messages, not full history
+          tools: [{ google_search: {} }],  // snake_case for REST API
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 4096
@@ -2619,7 +2627,7 @@ You help users find information on the web by searching Google and providing com
       });
 
       const vertexData = await vertexResponse.json();
-      console.log('Web Search Vertex AI response:', JSON.stringify(vertexData).substring(0, 1000));
+      console.log('Web Search Vertex AI full response:', JSON.stringify(vertexData, null, 2));
       
       if (vertexData.error) {
         throw new Error(`Vertex AI error: ${vertexData.error.message}`);
