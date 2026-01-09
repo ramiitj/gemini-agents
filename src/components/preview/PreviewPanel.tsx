@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { ExternalLink, RotateCcw, Check, AlertCircle, GitBranch, Settings, MousePointer, Loader2, RefreshCw, GitPullRequest, Camera } from "lucide-react";
+import { ExternalLink, RotateCcw, AlertCircle, GitBranch, Settings, MousePointer, Loader2, RefreshCw, Camera, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DiffViewer from "./DiffViewer";
 import DeploymentStatus from "./DeploymentStatus";
@@ -7,7 +7,7 @@ import PreviewFrame from "./PreviewFrame";
 import FileList from "./FileList";
 import ElementInfoPanel from "./ElementInfoPanel";
 import BranchStatus from "./BranchStatus";
-import CreatePRModal from "./CreatePRModal";
+import ChangeShareDialog from "@/components/team/ChangeShareDialog";
 import { useDeployment } from "@/hooks/useDeployment";
 import { useCodeChanges } from "@/hooks/useCodeChanges";
 import { useChangeRequests } from "@/hooks/useChangeRequests";
@@ -37,8 +37,7 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
   const [visualEditMode, setVisualEditMode] = useState(false);
   const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
   const [isSettingUpVercel, setIsSettingUpVercel] = useState(false);
-  const [isApproving, setIsApproving] = useState(false);
-  const [showPRModal, setShowPRModal] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   
   const { organization } = useOrganization();
   const { canMerge } = useUserRole(organization?.id);
@@ -97,60 +96,20 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
     }
   };
 
-  const handleApproveChanges = async () => {
-    const unapprovedChanges = changes.filter(c => !c.approved_at);
-    if (unapprovedChanges.length === 0) {
-      toast.info("No pending changes to approve");
-      return;
-    }
-
-    setIsApproving(true);
+  const handleShareWithTeam = async (message: string) => {
+    const pendingChanges = changes.filter(c => !c.approved_at);
+    
     try {
-      // Approve all pending changes in database
-      await approveChanges(unapprovedChanges.map(c => c.id));
-
-      // Push changes to GitHub if we have session context
-      if (session?.current_branch && session?.github_owner && session?.github_repo) {
-        const filesToCommit = unapprovedChanges
-          .filter(c => c.modified_content) // Only files with content
-          .map(c => ({
-            path: c.file_path,
-            content: c.modified_content
-          }));
-
-        if (filesToCommit.length > 0) {
-          toast.info("Pushing changes to GitHub...");
-          
-          const { error: pushError } = await supabase.functions.invoke('github-commit-push', {
-            body: {
-              owner: session.github_owner,
-              repo: session.github_repo,
-              branch: session.current_branch,
-              message: `Approved ${unapprovedChanges.length} AI-generated changes`,
-              files: filesToCommit,
-              baseBranch: session.current_branch
-            }
-          });
-
-          if (pushError) {
-            console.error('Failed to push to GitHub:', pushError);
-            toast.error('Changes approved but failed to push to GitHub');
-          } else {
-            toast.success("Changes pushed! Vercel will auto-deploy.");
-          }
-        }
-      }
-
       // Create a change request for team visibility
-      const filePaths = unapprovedChanges.map(c => c.file_path).join(", ");
+      const filePaths = pendingChanges.map(c => c.file_path).join(", ");
       await createChangeRequest({
-        title: `Changes approved: ${unapprovedChanges.length} files`,
+        title: `Changes shared: ${pendingChanges.length} files`,
         description: `Files modified: ${filePaths}`,
         conversationId,
         deploymentId: deployment?.id
       });
 
-      // Log activity
+      // Post the message to team comments
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: project } = await supabase
@@ -159,26 +118,36 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
           .eq('id', projectId)
           .single();
 
+        // Add team comment with the share message
+        const fullMessage = `${message}${previewUrl ? `\n\n🔗 Preview: ${previewUrl}` : ''}`;
+        
+        await supabase.from('team_comments').insert({
+          project_id: projectId,
+          user_id: user.id,
+          content: fullMessage,
+          attachments: []
+        });
+
+        // Log activity
         if (project?.organization_id) {
           await supabase.from('activity_log').insert({
             organization_id: project.organization_id,
             project_id: projectId,
             user_id: user.id,
-            action: 'changes_approved',
+            action: 'changes_shared',
             metadata: {
-              files_count: unapprovedChanges.length,
-              file_paths: unapprovedChanges.map(c => c.file_path)
+              files_count: pendingChanges.length,
+              file_paths: pendingChanges.map(c => c.file_path)
             }
           });
         }
       }
 
-      toast.success(`Approved ${unapprovedChanges.length} changes`);
+      toast.success("Changes shared with team");
     } catch (error) {
-      console.error('Failed to approve changes:', error);
-      toast.error('Failed to approve changes');
-    } finally {
-      setIsApproving(false);
+      console.error('Failed to share changes:', error);
+      toast.error('Failed to share changes');
+      throw error;
     }
   };
 
@@ -472,50 +441,29 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
           Undo
         </Button>
         
-        {/* Create PR button - only for owners/admins with an active branch */}
-        {canMerge && session?.current_branch && session.current_branch !== 'main' && session.github_owner && session.github_repo && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setShowPRModal(true)}
-          >
-            <GitPullRequest className="h-3.5 w-3.5" />
-            Create PR
-          </Button>
-        )}
-        
+        {/* Share with Team button */}
         <Button 
           size="sm" 
           className="ml-auto gap-1.5"
-          onClick={handleApproveChanges}
-          disabled={isApproving || pendingChangesCount === 0}
+          onClick={() => setShowShareDialog(true)}
+          disabled={pendingChangesCount === 0}
         >
-          {isApproving ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Check className="h-3.5 w-3.5" />
-          )}
+          <Users className="h-3.5 w-3.5" />
           {pendingChangesCount > 0 
-            ? `Approve ${pendingChangesCount} changes` 
-            : "Approve changes"
+            ? `Share ${pendingChangesCount} changes` 
+            : "Share with Team"
           }
         </Button>
       </div>
 
-      {/* Create PR Modal */}
-      {session?.github_owner && session?.github_repo && session?.current_branch && (
-        <CreatePRModal
-          open={showPRModal}
-          onOpenChange={setShowPRModal}
-          githubOwner={session.github_owner}
-          githubRepo={session.github_repo}
-          headBranch={session.current_branch}
-          onPRCreated={(prUrl) => {
-            toast.success("PR created! Review it on GitHub.");
-          }}
-        />
-      )}
+      {/* Share Dialog */}
+      <ChangeShareDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        changes={changes.filter(c => !c.approved_at)}
+        previewUrl={previewUrl}
+        onShare={handleShareWithTeam}
+      />
     </div>
   );
 };

@@ -134,7 +134,7 @@ const Project = () => {
                 onVercelSetup={handleVercelSetup}
               />
             </div>
-            <TeamSidebar organizationId={organization?.id || null} />
+            <TeamSidebar organizationId={organization?.id || null} projectId={project.id} />
           </div>
         </main>
       </div>

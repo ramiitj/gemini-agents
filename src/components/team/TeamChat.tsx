@@ -1,32 +1,41 @@
 import { useState } from "react";
-import { MessageSquare, Reply, Quote, Send, FileCode } from "lucide-react";
+import { MessageSquare, Reply, Quote, Send, FileCode, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import { useTeamComments, TeamComment } from "@/hooks/useTeamComments";
+import TeamFileUpload, { TeamAttachment, AttachmentPreview, AttachmentDisplay } from "./TeamFileUpload";
 import { formatDistanceToNow } from "date-fns";
 
 interface TeamChatProps {
-  changeRequestId: string | undefined;
+  projectId?: string;
+  changeRequestId?: string;
   title?: string;
 }
 
-const TeamChat = ({ changeRequestId, title }: TeamChatProps) => {
-  const { comments, loading, addComment } = useTeamComments(changeRequestId);
+const TeamChat = ({ projectId, changeRequestId, title }: TeamChatProps) => {
+  const { comments, loading, addComment } = useTeamComments({ 
+    changeRequestId, 
+    projectId 
+  });
   const [newComment, setNewComment] = useState("");
   const [replyingTo, setReplyingTo] = useState<TeamComment | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<TeamAttachment[]>([]);
 
   const handleSubmit = async () => {
-    if (!newComment.trim() || submitting) return;
+    if ((!newComment.trim() && pendingAttachments.length === 0) || submitting) return;
 
     setSubmitting(true);
     await addComment(newComment, {
-      parentId: replyingTo?.id
+      parentId: replyingTo?.id,
+      attachments: pendingAttachments.length > 0 ? pendingAttachments : undefined
     });
     setNewComment("");
     setReplyingTo(null);
+    setPendingAttachments([]);
     setSubmitting(false);
   };
 
@@ -36,11 +45,19 @@ const TeamChat = ({ changeRequestId, title }: TeamChatProps) => {
     }
   };
 
-  if (!changeRequestId) {
+  const handleFileUpload = (attachment: TeamAttachment) => {
+    setPendingAttachments(prev => [...prev, attachment]);
+  };
+
+  const removePendingAttachment = (index: number) => {
+    setPendingAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  if (!changeRequestId && !projectId) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6">
         <MessageSquare className="h-8 w-8 mb-2" />
-        <p className="text-sm text-center">Select a change request to view discussion</p>
+        <p className="text-sm text-center">No active discussion</p>
       </div>
     );
   }
@@ -69,7 +86,7 @@ const TeamChat = ({ changeRequestId, title }: TeamChatProps) => {
         ) : comments.length === 0 ? (
           <div className="text-center text-muted-foreground py-8">
             <MessageSquare className="h-6 w-6 mx-auto mb-2" />
-            <p className="text-sm">No comments yet. Start the discussion!</p>
+            <p className="text-sm">No messages yet. Start the discussion!</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -102,20 +119,34 @@ const TeamChat = ({ changeRequestId, title }: TeamChatProps) => {
         </div>
       )}
 
+      {/* Pending attachments */}
+      {pendingAttachments.length > 0 && (
+        <div className="border-t border-border px-4 py-2 flex flex-wrap gap-2">
+          {pendingAttachments.map((att, idx) => (
+            <AttachmentPreview 
+              key={idx} 
+              attachment={att} 
+              onRemove={() => removePendingAttachment(idx)} 
+            />
+          ))}
+        </div>
+      )}
+
       {/* Input area */}
       <div className="border-t border-border p-4">
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-end">
+          <TeamFileUpload onUpload={handleFileUpload} />
           <Textarea
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Add a comment... (Cmd+Enter to send)"
-            className="min-h-[60px] resize-none text-sm"
+            placeholder="Type a message... (Cmd+Enter to send)"
+            className="min-h-[60px] resize-none text-sm flex-1"
           />
           <Button
             size="icon"
             onClick={handleSubmit}
-            disabled={!newComment.trim() || submitting}
+            disabled={(!newComment.trim() && pendingAttachments.length === 0) || submitting}
           >
             <Send className="h-4 w-4" />
           </Button>
@@ -138,6 +169,9 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
     .join("")
     .toUpperCase() || "U";
 
+  // Check if this is a change share notification
+  const isChangeShare = comment.content.includes("need review") && comment.content.includes("•");
+
   return (
     <div className={`flex gap-3 ${isReply ? "ml-8" : ""}`}>
       <Avatar className="h-8 w-8">
@@ -153,6 +187,11 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
           <span className="text-xs text-muted-foreground">
             {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
           </span>
+          {isChangeShare && (
+            <Badge variant="secondary" className="text-xs">
+              Changes Shared
+            </Badge>
+          )}
         </div>
 
         {/* Quoted text */}
@@ -177,6 +216,15 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
         <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">
           {comment.content}
         </p>
+
+        {/* Attachments */}
+        {comment.attachments && comment.attachments.length > 0 && (
+          <div className="mt-2 space-y-2">
+            {comment.attachments.map((att, idx) => (
+              <AttachmentDisplay key={idx} attachment={att} />
+            ))}
+          </div>
+        )}
 
         <Button
           variant="ghost"

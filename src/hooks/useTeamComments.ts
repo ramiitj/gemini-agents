@@ -1,15 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { TeamAttachment } from '@/components/team/TeamFileUpload';
 
 export interface TeamComment {
   id: string;
-  change_request_id: string;
+  change_request_id: string | null;
+  project_id: string | null;
   parent_id: string | null;
   user_id: string;
   content: string;
   quoted_text: string | null;
   file_path: string | null;
   line_number: number | null;
+  attachments: TeamAttachment[];
   created_at: string;
   updated_at: string;
   profile?: {
@@ -17,6 +20,11 @@ export interface TeamComment {
     avatar_url: string | null;
   };
   replies?: TeamComment[];
+}
+
+interface UseTeamCommentsOptions {
+  changeRequestId?: string;
+  projectId?: string;
 }
 
 interface UseTeamCommentsReturn {
@@ -29,31 +37,43 @@ interface UseTeamCommentsReturn {
       filePath?: string;
       lineNumber?: number;
       parentId?: string;
+      attachments?: TeamAttachment[];
     }
   ) => Promise<void>;
   deleteComment: (id: string) => Promise<void>;
   refetch: () => Promise<void>;
 }
 
-export function useTeamComments(changeRequestId: string | undefined): UseTeamCommentsReturn {
+export function useTeamComments(options: UseTeamCommentsOptions | string | undefined): UseTeamCommentsReturn {
   const [comments, setComments] = useState<TeamComment[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Handle both old signature (changeRequestId string) and new options object
+  const opts: UseTeamCommentsOptions = typeof options === 'string' 
+    ? { changeRequestId: options }
+    : options || {};
+
+  const { changeRequestId, projectId } = opts;
+
   const fetchComments = async () => {
-    if (!changeRequestId) {
+    if (!changeRequestId && !projectId) {
       setComments([]);
       setLoading(false);
       return;
     }
 
-    const { data } = await supabase
-      .from('team_comments')
-      .select('*')
-      .eq('change_request_id', changeRequestId)
-      .order('created_at', { ascending: true });
+    let query = supabase.from('team_comments').select('*');
+    
+    if (changeRequestId) {
+      query = query.eq('change_request_id', changeRequestId);
+    } else if (projectId) {
+      query = query.eq('project_id', projectId);
+    }
+
+    const { data } = await query.order('created_at', { ascending: true });
 
     if (data) {
-      // Fetch profiles separately to avoid join issues
+      // Fetch profiles separately
       const userIds = [...new Set(data.map((c: any) => c.user_id))];
       const { data: profiles } = await supabase
         .from('profiles')
@@ -70,6 +90,7 @@ export function useTeamComments(changeRequestId: string | undefined): UseTeamCom
         const profile = profileMap.get(comment.user_id) as { full_name: string | null; avatar_url: string | null } | undefined;
         commentMap.set(comment.id, { 
           ...comment, 
+          attachments: comment.attachments || [],
           profile: profile || { full_name: null, avatar_url: null },
           replies: [] 
         });
@@ -97,23 +118,33 @@ export function useTeamComments(changeRequestId: string | undefined): UseTeamCom
       filePath?: string;
       lineNumber?: number;
       parentId?: string;
+      attachments?: TeamAttachment[];
     }
   ) => {
-    if (!changeRequestId) return;
+    if (!changeRequestId && !projectId) return;
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    await supabase.from('team_comments').insert({
-      change_request_id: changeRequestId,
+    const insertData: Record<string, any> = {
       user_id: user.id,
       content,
       quoted_text: options?.quotedText,
       file_path: options?.filePath,
       line_number: options?.lineNumber,
-      parent_id: options?.parentId
-    });
-  }, [changeRequestId]);
+      parent_id: options?.parentId,
+      attachments: options?.attachments || []
+    };
+
+    // Only add one scope
+    if (changeRequestId) {
+      insertData.change_request_id = changeRequestId;
+    } else if (projectId) {
+      insertData.project_id = projectId;
+    }
+
+    await supabase.from('team_comments').insert(insertData as any);
+  }, [changeRequestId, projectId]);
 
   const deleteComment = useCallback(async (id: string) => {
     await supabase.from('team_comments').delete().eq('id', id);
@@ -122,17 +153,20 @@ export function useTeamComments(changeRequestId: string | undefined): UseTeamCom
   useEffect(() => {
     fetchComments();
 
-    if (!changeRequestId) return;
+    if (!changeRequestId && !projectId) return;
+
+    const filterColumn = changeRequestId ? 'change_request_id' : 'project_id';
+    const filterValue = changeRequestId || projectId;
 
     const channel = supabase
-      .channel(`comments-${changeRequestId}`)
+      .channel(`comments-${filterValue}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'team_comments',
-          filter: `change_request_id=eq.${changeRequestId}`
+          filter: `${filterColumn}=eq.${filterValue}`
         },
         () => fetchComments()
       )
@@ -141,7 +175,7 @@ export function useTeamComments(changeRequestId: string | undefined): UseTeamCom
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [changeRequestId]);
+  }, [changeRequestId, projectId]);
 
   return { comments, loading, addComment, deleteComment, refetch: fetchComments };
 }
