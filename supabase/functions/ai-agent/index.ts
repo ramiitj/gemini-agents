@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1659,11 +1660,11 @@ User Request: ${message}`;
           .limit(10);
         
         if (!pendingError && pendingChanges && pendingChanges.length > 0) {
-          console.log('[Deploy Shortcut] Blocked - unapproved code_changes:', pendingChanges.map(c => c.file_path));
+          console.log('[Deploy Shortcut] Blocked - unapproved code_changes:', pendingChanges.map((c: { id: string; file_path: string }) => c.file_path));
           return new Response(
             JSON.stringify({
               response: `⚠️ **Cannot deploy yet - you have ${pendingChanges.length} unapproved code change(s):**\n\n` +
-                pendingChanges.map(c => `- \`${c.file_path}\``).join('\n') + '\n\n' +
+                pendingChanges.map((c: { id: string; file_path: string }) => `- \`${c.file_path}\``).join('\n') + '\n\n' +
                 `Please click **"Approve changes"** in the Preview panel first. This will push the changes to GitHub and automatically trigger a Vercel deployment.\n\n` +
                 `Or deploy the current branch without these changes: **"deploy without pending changes"**`,
               success: false,
