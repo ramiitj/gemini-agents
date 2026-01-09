@@ -794,27 +794,49 @@ async function executeTool(
     }
 
     case 'git_add_commit_push': {
-      const { commit_message, branch: explicitBranch } = args;
+      const { commit_message } = args;
       
+      // Check for repo context
       if (!context.currentRepo) {
-        return { result: { error: 'No repository cloned. Use github_clone_repo first.' }, context };
+        return { 
+          result: { 
+            error: 'No repository cloned. Use github_clone_repo first.',
+            hint: 'Run github_clone_repo to initialize your user branch before committing.'
+          }, 
+          context 
+        };
+      }
+      
+      // Check for staged files - CRITICAL: must use file_write first
+      const stagedCount = Object.keys(context.stagedFiles).length;
+      if (stagedCount === 0) {
+        return { 
+          result: { 
+            error: 'No files staged for commit. You must use file_write to stage changes before committing.',
+            hint: 'WORKFLOW: 1) file_read to get current content, 2) file_write to save your modifications, 3) git_add_commit_push to commit.',
+            staged_files_count: 0,
+            action_required: 'Use file_write to make code changes first. Do NOT just show code in text - that does NOT modify files.'
+          }, 
+          context 
+        };
       }
       
       const { owner, repo } = context.currentRepo;
-      // Use explicit branch if provided, otherwise use current branch from context
-      const branch = explicitBranch || context.currentRepo.branch;
-      const baseBranch = context.currentRepo.branch;
+      // ALWAYS use branch from context - never from args
+      const branch = context.currentRepo.branch;
+      
+      console.log(`Committing ${stagedCount} files to branch: ${branch}`);
       
       // Get the base branch's latest commit
       const refResponse = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`,
+        `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${branch}`,
         { headers: githubHeaders }
       );
       const refData = await refResponse.json();
       const baseSha = refData.object?.sha;
       
       if (!baseSha) {
-        return { result: { error: 'Could not get base commit SHA' }, context };
+        return { result: { error: `Could not get base commit SHA for branch: ${branch}` }, context };
       }
       
       // Get the base tree
@@ -856,7 +878,7 @@ async function executeTool(
       }
       
       if (treeItems.length === 0) {
-        return { result: { error: 'No changes to commit' }, context };
+        return { result: { error: 'No actual changes to commit (files unchanged)' }, context };
       }
       
       // Create new tree
@@ -1326,6 +1348,10 @@ serve(async (req) => {
       }
     }
 
+    // Count staged files for context
+    const stagedFilesCount = Object.keys(toolContext.stagedFiles).length;
+    const stagedFilesList = Object.keys(toolContext.stagedFiles);
+
     // Mode-specific instructions
     const modeInstructions = mode === 'chat' 
       ? `## CHAT MODE - PLANNING AND ANALYSIS
@@ -1351,19 +1377,32 @@ BLOCKED actions (do NOT attempt these - tell user to switch to Execute mode):
 START by cloning the repo if not already done, then analyze code and discuss plans.
 If the user asks to make changes, explain what you WOULD do and ask them to switch to Execute mode.`
       : `## EXECUTION MODE - FULL ACCESS
-You are in EXECUTION mode with full tool access. You can:
-- Clone repo (auto-creates your user branch)
-- Read, write, and delete files
-- Commit and push changes
-- Trigger deployments
-- Create pull requests
+You are in EXECUTION mode with full tool access.
 
-WORKFLOW:
-1. Clone repo if needed (creates user branch automatically)
-2. Read relevant files to understand context
-3. Make minimal, targeted changes
-4. Push to your branch (triggers Vercel auto-deploy)
-5. Report success
+### CRITICAL: HOW TO MAKE CODE CHANGES
+**You MUST use the file_write tool to make ANY code changes.**
+Just showing code in your text response does NOT modify files!
+
+**CORRECT WORKFLOW (follow exactly):**
+1. Clone repo if needed → \`github_clone_repo\` (branch is auto-created)
+2. Read the file first → \`file_read\` (REQUIRED before writing)
+3. **MAKE CHANGES using \`file_write\`** → This stages the file for commit
+4. Show diff to user → \`generate_diff\`
+5. Commit changes → \`git_add_commit_push\` (do NOT pass branch argument)
+
+**COMMON MISTAKES - DO NOT DO:**
+❌ Showing code in markdown and saying "here are the changes" - this does NOTHING
+❌ Describing what to change without calling file_write
+❌ Asking the user to make changes themselves
+❌ Using git_add_commit_push before using file_write
+
+**CORRECT APPROACH:**
+✅ Read file → Modify content → Call file_write → Show diff → Commit
+
+**Current staged files: ${stagedFilesCount}**
+${stagedFilesCount > 0 
+  ? `Files ready to commit:\n${stagedFilesList.map(f => `  - ${f}`).join('\n')}`
+  : '(none - use file_write to stage changes before committing)'}
 
 Always push to your user branch (never directly to main).`;
 
@@ -1453,6 +1492,7 @@ When the user sends a message with visual element context (they selected an elem
 ## Current Context
 - GitHub Repository: ${toolContext.currentRepo ? `https://github.com/${toolContext.currentRepo.owner}/${toolContext.currentRepo.repo}` : (githubRepo || 'Not connected')}
 - Current Branch: ${toolContext.currentRepo?.branch || '(auto-created on clone)'}
+- Staged Files: ${stagedFilesCount} files ready to commit${stagedFilesCount > 0 ? ` (${stagedFilesList.join(', ')})` : ''}
 - Project ID: ${projectId}
 - Conversation ID: ${conversationId}
 ${visualContext ? `
