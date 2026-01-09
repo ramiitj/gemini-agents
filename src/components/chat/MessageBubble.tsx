@@ -4,20 +4,20 @@ import type { Message } from "./ChatContainer";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import SearchResultsPanel from "./SearchResultsPanel";
-import type { SearchAttachment, GroundingMetadata } from "@/types/search";
+import type { SearchAttachment } from "@/types/search";
+import { parseMessageContent, MessageBlock } from "@/lib/message-parser";
+import PhaseHeader from "./blocks/PhaseHeader";
+import SectionHeader from "./blocks/SectionHeader";
+import CodeBlockEnhanced from "./blocks/CodeBlockEnhanced";
+import FileReference from "./blocks/FileReference";
+import ActionBlock from "./blocks/ActionBlock";
+import NoteBlock from "./blocks/NoteBlock";
+import ListBlock from "./blocks/ListBlock";
 
 interface MessageBubbleProps {
   message: Message;
   onPinResult?: (result: SearchAttachment) => void;
   pinnedUrls?: string[];
-}
-
-// Strip markdown asterisks from text
-function stripMarkdown(text: string): string {
-  return text
-    .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove **bold**
-    .replace(/\*([^*]+)\*/g, '$1')     // Remove *italic*
-    .replace(/`([^`]+)`/g, '$1');      // Remove inline `code`
 }
 
 // Render diff line with proper coloring
@@ -43,6 +43,73 @@ function DiffLine({ line, index }: { line: string; index: number }) {
   );
 }
 
+// Render a single message block
+function renderBlock(block: MessageBlock, index: number): React.ReactNode {
+  switch (block.type) {
+    case 'phase_header':
+      return <PhaseHeader key={index} content={block.content} />;
+    
+    case 'section_header':
+      return <SectionHeader key={index} content={block.content} />;
+    
+    case 'code':
+      return (
+        <CodeBlockEnhanced 
+          key={index}
+          code={block.content}
+          filename={block.filename}
+          language={block.language || 'plaintext'}
+          action={block.actionType}
+        />
+      );
+    
+    case 'file_reference':
+      return <FileReference key={index} filename={block.content} />;
+    
+    case 'agent_action':
+      return (
+        <ActionBlock 
+          key={index}
+          content={block.content}
+          actor="agent"
+          status={block.actionStatus || 'complete'}
+        />
+      );
+    
+    case 'user_action':
+      return (
+        <ActionBlock 
+          key={index}
+          content={block.content}
+          actor="user"
+          status="pending"
+        />
+      );
+    
+    case 'note':
+      return (
+        <NoteBlock 
+          key={index}
+          content={block.content}
+          type={block.noteType || 'info'}
+        />
+      );
+    
+    case 'list':
+      return <ListBlock key={index} content={block.content} />;
+    
+    case 'text':
+    default:
+      // Skip empty text blocks
+      if (!block.content.trim()) return null;
+      return (
+        <p key={index} className="text-sm whitespace-pre-wrap my-1">
+          {block.content}
+        </p>
+      );
+  }
+}
+
 const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
   ({ message, onPinResult, pinnedUrls = [] }, ref) => {
     if (message.role === "system") {
@@ -54,23 +121,35 @@ const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
     }
 
     const isUser = message.role === "user";
-    const displayContent = stripMarkdown(message.content);
     const isWebSearch = message.mode === 'web_search';
     const hasGroundingData = (message.groundingMetadata?.groundingChunks?.length ?? 0) > 0;
+    
+    // Parse assistant messages into structured blocks
+    const blocks = !isUser ? parseMessageContent(message.content) : [];
 
     return (
       <div ref={ref} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
         <div
           className={cn(
-            "max-w-[85%] rounded-lg px-4 py-2.5",
+            "max-w-[85%] rounded-lg",
             isUser
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-foreground"
+              ? "bg-primary text-primary-foreground px-4 py-2.5"
+              : "bg-muted text-foreground px-4 py-3"
           )}
         >
-          <p className="text-sm whitespace-pre-wrap">{displayContent}</p>
+          {/* User messages: simple text */}
+          {isUser && (
+            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+          )}
           
-          {/* Code changes section */}
+          {/* Assistant messages: structured blocks */}
+          {!isUser && (
+            <div className="space-y-1">
+              {blocks.map((block, index) => renderBlock(block, index))}
+            </div>
+          )}
+          
+          {/* Code changes section (from agent execution) */}
           {message.codeChanges && message.codeChanges.length > 0 && (
             <div className="mt-4 space-y-3 border-t border-border/50 pt-3">
               <div className="text-xs font-medium text-muted-foreground flex items-center gap-2">
