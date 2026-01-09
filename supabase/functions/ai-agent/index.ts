@@ -1606,7 +1606,15 @@ User Request: ${message}`;
       branch: toolContext.currentRepo?.branch
     });
     
-    if (isDeployIntent && mode === 'execution') {
+    // Check for force deploy intent (bypasses pending changes check)
+    const forceDeployPatterns = [
+      /^deploy\s+without\s+(pending\s+)?changes$/i,
+      /^force\s+deploy$/i,
+      /^deploy\s+anyway$/i
+    ];
+    const isForceDeployIntent = forceDeployPatterns.some(p => p.test(message.trim()));
+    
+    if ((isDeployIntent || isForceDeployIntent) && mode === 'execution') {
       console.log('[Deploy Shortcut] TRIGGERED - bypassing LLM');
       
       // Check if we have required context
@@ -1620,6 +1628,51 @@ User Request: ${message}`;
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
+      }
+      
+      // Check for staged files in memory (not yet committed)
+      const stagedFilesList = Object.keys(toolContext.stagedFiles || {});
+      if (stagedFilesList.length > 0 && !isForceDeployIntent) {
+        console.log('[Deploy Shortcut] Blocked - staged files pending:', stagedFilesList);
+        return new Response(
+          JSON.stringify({
+            response: `⚠️ **Cannot deploy yet - you have ${stagedFilesList.length} staged file(s) not committed:**\n\n` +
+              stagedFilesList.map(f => `- \`${f}\``).join('\n') + '\n\n' +
+              `Please commit these changes first with: **"commit and push the changes"**\n` +
+              `Or deploy without them: **"deploy without pending changes"**`,
+            success: false,
+            mode,
+            shortcut: 'deploy_pending_staged'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      // Check for unapproved code_changes in database
+      if (!isForceDeployIntent && supabaseUrl && supabaseKey && projectId) {
+        const supabaseClient = createClient(supabaseUrl, supabaseKey);
+        const { data: pendingChanges, error: pendingError } = await supabaseClient
+          .from('code_changes')
+          .select('id, file_path')
+          .eq('project_id', projectId)
+          .is('approved_at', null)
+          .limit(10);
+        
+        if (!pendingError && pendingChanges && pendingChanges.length > 0) {
+          console.log('[Deploy Shortcut] Blocked - unapproved code_changes:', pendingChanges.map(c => c.file_path));
+          return new Response(
+            JSON.stringify({
+              response: `⚠️ **Cannot deploy yet - you have ${pendingChanges.length} unapproved code change(s):**\n\n` +
+                pendingChanges.map(c => `- \`${c.file_path}\``).join('\n') + '\n\n' +
+                `Please click **"Approve changes"** in the Preview panel first. This will push the changes to GitHub and automatically trigger a Vercel deployment.\n\n` +
+                `Or deploy the current branch without these changes: **"deploy without pending changes"**`,
+              success: false,
+              mode,
+              shortcut: 'deploy_pending_approval'
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
       }
       
       const deployBranch = toolContext.currentRepo?.branch || 'main';
