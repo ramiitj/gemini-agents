@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTeam } from "@/hooks/useTeam";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import InviteMemberModal from "./InviteMemberModal";
 import MemberCard from "./MemberCard";
 import TeamChat from "./TeamChat";
@@ -17,6 +18,7 @@ interface TeamSidebarProps {
 
 const TeamSidebar = ({ organizationId, projectId }: TeamSidebarProps) => {
   const { members, loading, currentUserRole } = useTeam(organizationId);
+  const { unreadCount } = useUnreadMessages(projectId || null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
 
@@ -62,9 +64,14 @@ const TeamSidebar = ({ organizationId, projectId }: TeamSidebarProps) => {
 
         <Tabs defaultValue="discussions" className="flex-1 flex flex-col">
           <TabsList className="mx-3 mt-2 grid grid-cols-2">
-            <TabsTrigger value="discussions" className="text-xs gap-1">
+            <TabsTrigger value="discussions" className="text-xs gap-1 relative">
               <MessageSquare className="h-3 w-3" />
               Discussions
+              {unreadCount > 0 && (
+                <Badge variant="destructive" className="ml-1 h-4 min-w-4 px-1 text-[10px]">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="members" className="text-xs gap-1">
               <Users className="h-3 w-3" />

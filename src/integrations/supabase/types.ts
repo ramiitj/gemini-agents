@@ -273,6 +273,64 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_read_status: {
+        Row: {
+          id: string
+          last_read_at: string | null
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_read_at?: string | null
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_read_at?: string | null
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_read_status_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_typing: {
+        Row: {
+          id: string
+          project_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_typing_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       code_changes: {
         Row: {
           additions: number | null
@@ -371,6 +429,44 @@ export type Database = {
           },
         ]
       }
+      custom_roles: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          organization_id: string
+          permissions: Json
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          permissions?: Json
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          permissions?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deployments: {
         Row: {
           conversation_id: string | null
@@ -448,10 +544,13 @@ export type Database = {
       invitations: {
         Row: {
           created_at: string | null
+          custom_permissions: Json | null
+          custom_role_id: string | null
           email: string
           expires_at: string
           id: string
           invited_by: string | null
+          invitee_name: string | null
           organization_id: string
           role: string
           status: string
@@ -459,10 +558,13 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          custom_permissions?: Json | null
+          custom_role_id?: string | null
           email: string
           expires_at?: string
           id?: string
           invited_by?: string | null
+          invitee_name?: string | null
           organization_id: string
           role?: string
           status?: string
@@ -470,16 +572,26 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          custom_permissions?: Json | null
+          custom_role_id?: string | null
           email?: string
           expires_at?: string
           id?: string
           invited_by?: string | null
+          invitee_name?: string | null
           organization_id?: string
           role?: string
           status?: string
           token?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "invitations_custom_role_id_fkey"
+            columns: ["custom_role_id"]
+            isOneToOne: false
+            referencedRelation: "custom_roles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invitations_invited_by_fkey"
             columns: ["invited_by"]
@@ -693,6 +805,8 @@ export type Database = {
       user_roles: {
         Row: {
           created_at: string | null
+          custom_permissions: Json | null
+          custom_role_id: string | null
           id: string
           organization_id: string
           role: Database["public"]["Enums"]["app_role"]
@@ -700,6 +814,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          custom_permissions?: Json | null
+          custom_role_id?: string | null
           id?: string
           organization_id: string
           role?: Database["public"]["Enums"]["app_role"]
@@ -707,12 +823,21 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          custom_permissions?: Json | null
+          custom_role_id?: string | null
           id?: string
           organization_id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "user_roles_custom_role_id_fkey"
+            columns: ["custom_role_id"]
+            isOneToOne: false
+            referencedRelation: "custom_roles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_roles_organization_id_fkey"
             columns: ["organization_id"]

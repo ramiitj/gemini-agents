@@ -237,6 +237,19 @@ const toolDefinitions = [
       },
       required: []
     }
+  },
+  {
+    name: 'web_search',
+    description: 'Search the web for images, videos, articles, and content. Use in chat mode for research, gathering context, and finding reference materials.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: { type: 'STRING', description: 'Search query - be specific and descriptive' },
+        search_type: { type: 'STRING', description: 'Type: "all" (default), "images", "videos", "news"' },
+        num_results: { type: 'NUMBER', description: 'Number of results (default: 5, max: 10)' }
+      },
+      required: ['query']
+    }
   }
 ];
 
@@ -251,7 +264,8 @@ const chatModeTools = [
   'analyze_visual_element',
   'vercel_get_deployment_status',
   'get_build_logs',
-  'analyze_dependencies'
+  'analyze_dependencies',
+  'web_search'
 ];
 
 // Generate unified diff for file changes
@@ -2013,6 +2027,40 @@ async function executeTool(
         },
         context
       };
+    }
+
+    case 'web_search': {
+      const { query, search_type = 'all', num_results = 5 } = args;
+      await emit('searching', 'in_progress', { query });
+      
+      try {
+        // Use Google Custom Search API (free tier: 100 queries/day)
+        const apiKey = Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('GOOGLE_SEARCH_API_KEY');
+        const searchEngineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID') || 'b1c8e9f1c8e9f1c8e'; // Default public CSE
+        
+        let searchUrl = `https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(query)}&num=${Math.min(num_results, 10)}`;
+        if (apiKey) searchUrl += `&key=${apiKey}`;
+        if (searchEngineId) searchUrl += `&cx=${searchEngineId}`;
+        if (search_type === 'images') searchUrl += '&searchType=image';
+        
+        const response = await fetch(searchUrl);
+        const data = await response.json();
+        
+        const results = (data.items || []).slice(0, num_results).map((item: any) => ({
+          title: item.title,
+          link: item.link,
+          snippet: item.snippet,
+          thumbnail: item.pagemap?.cse_thumbnail?.[0]?.src
+        }));
+        
+        await emit('searching', 'complete', { resultsCount: results.length });
+        return {
+          result: { query, search_type, results_count: results.length, results },
+          context
+        };
+      } catch (err: any) {
+        return { result: { error: `Search failed: ${err.message}`, query }, context };
+      }
     }
 
     default:
