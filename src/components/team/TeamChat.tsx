@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MessageSquare, Reply, Quote, Send, FileCode, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,7 +6,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { useTeamComments, TeamComment } from "@/hooks/useTeamComments";
+import { useTypingIndicator } from "@/hooks/useTypingIndicator";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import TeamFileUpload, { TeamAttachment, AttachmentPreview, AttachmentDisplay } from "./TeamFileUpload";
+import TypingIndicator from "./TypingIndicator";
 import { formatDistanceToNow } from "date-fns";
 
 interface TeamChatProps {
@@ -20,10 +23,19 @@ const TeamChat = ({ projectId, changeRequestId, title }: TeamChatProps) => {
     changeRequestId, 
     projectId 
   });
+  const { typingUsers, setTyping } = useTypingIndicator(projectId || null);
+  const { markAsRead } = useUnreadMessages(projectId || null);
   const [newComment, setNewComment] = useState("");
   const [replyingTo, setReplyingTo] = useState<TeamComment | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<TeamAttachment[]>([]);
+
+  // Mark as read when viewing comments
+  useEffect(() => {
+    if (projectId && comments.length > 0) {
+      markAsRead();
+    }
+  }, [projectId, comments.length, markAsRead]);
 
   const handleSubmit = async () => {
     if ((!newComment.trim() && pendingAttachments.length === 0) || submitting) return;
@@ -42,6 +54,13 @@ const TeamChat = ({ projectId, changeRequestId, title }: TeamChatProps) => {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       handleSubmit();
+    }
+  };
+
+  const handleTextChange = (value: string) => {
+    setNewComment(value);
+    if (value.length > 0) {
+      setTyping(true);
     }
   };
 
@@ -132,13 +151,16 @@ const TeamChat = ({ projectId, changeRequestId, title }: TeamChatProps) => {
         </div>
       )}
 
+      {/* Typing indicator */}
+      <TypingIndicator typingUsers={typingUsers} />
+
       {/* Input area */}
       <div className="border-t border-border p-4">
         <div className="flex gap-2 items-end">
           <TeamFileUpload onUpload={handleFileUpload} />
           <Textarea
             value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
+            onChange={(e) => handleTextChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message... (Cmd+Enter to send)"
             className="min-h-[60px] resize-none text-sm flex-1"
