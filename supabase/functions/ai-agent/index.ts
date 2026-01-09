@@ -34,12 +34,13 @@ const toolDefinitions = [
   },
   {
     name: 'file_write',
-    description: 'Write or update a file in the cloned repository',
+    description: 'Write or update a file and IMMEDIATELY push to GitHub. Each call creates a commit. Use this for ALL code changes.',
     parameters: {
       type: 'OBJECT',
       properties: {
         file_path: { type: 'STRING', description: 'Relative path to the file from repo root' },
-        content: { type: 'STRING', description: 'Complete new content for the file' }
+        content: { type: 'STRING', description: 'Complete new content for the file' },
+        commit_message: { type: 'STRING', description: 'Commit message (optional, auto-generated if not provided)' }
       },
       required: ['file_path', 'content']
     }
@@ -78,6 +79,31 @@ const toolDefinitions = [
         file_extension: { type: 'STRING', description: 'Filter by file extension (e.g., "tsx", "ts")' }
       },
       required: ['query']
+    }
+  },
+  {
+    name: 'analyze_dependencies',
+    description: 'Analyze a file for imports and validate against package.json. Returns missing dependencies that need to be installed. ALWAYS use this before file_write when adding new imports.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        file_path: { type: 'STRING', description: 'File to analyze for imports' },
+        content: { type: 'STRING', description: 'File content to check (if not provided, reads from GitHub)' }
+      },
+      required: ['file_path']
+    }
+  },
+  {
+    name: 'add_dependency',
+    description: 'Add a package to package.json dependencies and push the change. Use this when analyze_dependencies reports missing packages.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        package_name: { type: 'STRING', description: 'NPM package name (e.g., "react-i18next")' },
+        version: { type: 'STRING', description: 'Version (default: "latest")' },
+        dev: { type: 'BOOLEAN', description: 'Add to devDependencies instead (default: false)' }
+      },
+      required: ['package_name']
     }
   },
   {
@@ -145,7 +171,7 @@ const toolDefinitions = [
   },
   {
     name: 'get_build_logs',
-    description: 'Retrieve detailed build logs from a Vercel deployment. Use to diagnose build failures.',
+    description: 'Retrieve detailed build logs from a Vercel deployment. Use to diagnose build failures and extract specific error messages.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -200,6 +226,17 @@ const toolDefinitions = [
       },
       required: ['repo_url', 'head_branch', 'base_branch', 'title']
     }
+  },
+  {
+    name: 'autonomous_deploy_and_verify',
+    description: 'Trigger deployment and autonomously monitor, diagnose, and fix any build errors. Use this after making changes to deploy and verify they work.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        max_retries: { type: 'NUMBER', description: 'Maximum fix attempts (default: 5)' }
+      },
+      required: []
+    }
   }
 ];
 
@@ -213,7 +250,8 @@ const chatModeTools = [
   'capture_screenshot',
   'analyze_visual_element',
   'vercel_get_deployment_status',
-  'get_build_logs'
+  'get_build_logs',
+  'analyze_dependencies'
 ];
 
 // Generate unified diff for file changes
@@ -223,23 +261,19 @@ function generateUnifiedDiff(path: string, original: string, modified: string): 
   
   let diff = `--- a/${path}\n+++ b/${path}\n`;
   
-  // Find changed sections
   let i = 0;
   while (i < Math.max(originalLines.length, modifiedLines.length)) {
     const origLine = originalLines[i] ?? null;
     const modLine = modifiedLines[i] ?? null;
     
     if (origLine !== modLine) {
-      // Start of a change hunk
       const hunkStart = Math.max(0, i - 2);
       let hunkEnd = i;
       
-      // Find end of changes
       while (hunkEnd < Math.max(originalLines.length, modifiedLines.length)) {
         const o = originalLines[hunkEnd] ?? null;
         const m = modifiedLines[hunkEnd] ?? null;
         if (o === m) {
-          // Check if we have 3 consecutive matching lines
           let matches = 0;
           for (let j = 0; j < 3 && hunkEnd + j < Math.max(originalLines.length, modifiedLines.length); j++) {
             if (originalLines[hunkEnd + j] === modifiedLines[hunkEnd + j]) matches++;
@@ -250,10 +284,8 @@ function generateUnifiedDiff(path: string, original: string, modified: string): 
       }
       hunkEnd = Math.min(hunkEnd + 2, Math.max(originalLines.length, modifiedLines.length));
       
-      // Output hunk header
       diff += `@@ -${hunkStart + 1},${Math.min(hunkEnd - hunkStart, originalLines.length - hunkStart)} +${hunkStart + 1},${Math.min(hunkEnd - hunkStart, modifiedLines.length - hunkStart)} @@\n`;
       
-      // Output lines
       for (let j = hunkStart; j < hunkEnd; j++) {
         const o = originalLines[j];
         const m = modifiedLines[j];
@@ -273,6 +305,141 @@ function generateUnifiedDiff(path: string, original: string, modified: string): 
   }
   
   return diff || `--- a/${path}\n+++ b/${path}\n(no changes)`;
+}
+
+// Parse build errors from logs
+function parseBuildError(logs: string): {
+  type: 'missing_module' | 'typescript' | 'syntax' | 'import' | 'unknown';
+  module?: string;
+  file?: string;
+  line?: number;
+  message: string;
+  actionable: boolean;
+} {
+  // Pattern: Cannot find module 'X'
+  const missingModule = logs.match(/Cannot find module ['"]([^'"]+)['"]/);
+  if (missingModule) {
+    return {
+      type: 'missing_module',
+      module: missingModule[1],
+      message: `Missing dependency: ${missingModule[1]}`,
+      actionable: true
+    };
+  }
+  
+  // Pattern: Module not found: Can't resolve 'X'
+  const cantResolve = logs.match(/Module not found:.*Can't resolve ['"]([^'"]+)['"]/);
+  if (cantResolve) {
+    return {
+      type: 'missing_module',
+      module: cantResolve[1],
+      message: `Missing dependency: ${cantResolve[1]}`,
+      actionable: true
+    };
+  }
+  
+  // Pattern: Could not resolve 'X'
+  const couldNotResolve = logs.match(/Could not resolve ['"]([^'"]+)['"]/);
+  if (couldNotResolve) {
+    return {
+      type: 'missing_module',
+      module: couldNotResolve[1],
+      message: `Missing dependency: ${couldNotResolve[1]}`,
+      actionable: true
+    };
+  }
+  
+  // Pattern: TS2304: Cannot find name 'X'
+  const tsError = logs.match(/TS\d+:\s*(.+?)(?:\n|$)/);
+  if (tsError) {
+    const fileMatch = logs.match(/(\S+\.tsx?):(\d+):\d+/);
+    return {
+      type: 'typescript',
+      message: tsError[1],
+      file: fileMatch?.[1],
+      line: fileMatch ? parseInt(fileMatch[2]) : undefined,
+      actionable: true
+    };
+  }
+  
+  // Pattern: SyntaxError
+  const syntaxError = logs.match(/SyntaxError:\s*(.+?)(?:\n|$)/);
+  if (syntaxError) {
+    return {
+      type: 'syntax',
+      message: syntaxError[1],
+      actionable: true
+    };
+  }
+  
+  // Pattern: import error
+  const importError = logs.match(/does not provide an export named ['"]([^'"]+)['"]/);
+  if (importError) {
+    return {
+      type: 'import',
+      message: `Named export '${importError[1]}' not found`,
+      actionable: true
+    };
+  }
+  
+  // Fallback
+  const errorLines = logs.split('\n').filter(l => 
+    l.toLowerCase().includes('error') || 
+    l.includes('failed') ||
+    l.includes('Cannot')
+  ).slice(0, 5);
+  
+  return {
+    type: 'unknown',
+    message: errorLines.join('\n') || 'Build failed with unknown error',
+    actionable: false
+  };
+}
+
+// Extract package name from import path
+function getPackageName(importPath: string): string | null {
+  // Skip relative imports
+  if (importPath.startsWith('.') || importPath.startsWith('/')) {
+    return null;
+  }
+  
+  // Skip path aliases
+  if (importPath.startsWith('@/') || importPath.startsWith('~')) {
+    return null;
+  }
+  
+  // Scoped packages: @scope/package
+  if (importPath.startsWith('@')) {
+    const parts = importPath.split('/');
+    if (parts.length >= 2) {
+      return `${parts[0]}/${parts[1]}`;
+    }
+  }
+  
+  // Regular packages: package or package/subpath
+  return importPath.split('/')[0];
+}
+
+// Analyze imports in a file
+function analyzeImports(content: string): string[] {
+  const imports: Set<string> = new Set();
+  
+  // Match: import ... from 'package'
+  const importFromRegex = /import\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+)['"]/g;
+  let match;
+  while ((match = importFromRegex.exec(content)) !== null) {
+    const pkg = getPackageName(match[1]);
+    if (pkg) imports.add(pkg);
+  }
+  
+  // Match: require('package')
+  const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  while ((match = requireRegex.exec(content)) !== null) {
+    const pkg = getPackageName(match[1]);
+    if (pkg) imports.add(pkg);
+  }
+  
+  return Array.from(imports);
 }
 
 // Get Google OAuth access token from service account
@@ -349,6 +516,7 @@ interface ToolContext {
   projectId?: string;
   conversationId?: string;
   userId?: string;
+  packageJson?: any; // Cached package.json
 }
 
 // Load agent session from database
@@ -387,7 +555,6 @@ async function saveAgentSession(
   mode: string
 ): Promise<void> {
   try {
-    // Check if session exists first
     const checkResponse = await fetch(
       `${supabaseUrl}/rest/v1/agent_sessions?project_id=eq.${projectId}&user_id=eq.${userId}&select=id`,
       {
@@ -416,7 +583,6 @@ async function saveAgentSession(
     });
 
     if (existing && existing.length > 0) {
-      // UPDATE existing session
       const updateRes = await fetch(
         `${supabaseUrl}/rest/v1/agent_sessions?project_id=eq.${projectId}&user_id=eq.${userId}`,
         {
@@ -434,7 +600,6 @@ async function saveAgentSession(
         console.error('Failed to update session:', await updateRes.text());
       }
     } else {
-      // INSERT new session
       const insertRes = await fetch(`${supabaseUrl}/rest/v1/agent_sessions`, {
         method: 'POST',
         headers: {
@@ -455,6 +620,100 @@ async function saveAgentSession(
     }
   } catch (e) {
     console.error('Failed to save agent session:', e);
+  }
+}
+
+// Atomic push to GitHub (creates a single commit for one file)
+async function atomicGitHubPush(
+  owner: string,
+  repo: string,
+  branch: string,
+  filePath: string,
+  content: string,
+  commitMessage: string,
+  githubHeaders: Record<string, string>
+): Promise<{ success: boolean; commitSha?: string; error?: string }> {
+  try {
+    // 1. Get branch HEAD
+    const refResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${branch}`,
+      { headers: githubHeaders }
+    );
+    
+    if (!refResponse.ok) {
+      return { success: false, error: `Branch ${branch} not found` };
+    }
+    
+    const refData = await refResponse.json();
+    const baseSha = refData.object?.sha;
+    
+    // 2. Get parent commit's tree
+    const commitResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/commits/${baseSha}`,
+      { headers: githubHeaders }
+    );
+    const commitData = await commitResponse.json();
+    const baseTreeSha = commitData.tree?.sha;
+    
+    // 3. Create blob
+    const blobResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/blobs`,
+      {
+        method: 'POST',
+        headers: { ...githubHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, encoding: 'utf-8' })
+      }
+    );
+    const blobData = await blobResponse.json();
+    
+    // 4. Create tree
+    const treeResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees`,
+      {
+        method: 'POST',
+        headers: { ...githubHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          base_tree: baseTreeSha,
+          tree: [{
+            path: filePath,
+            mode: '100644',
+            type: 'blob',
+            sha: blobData.sha
+          }]
+        })
+      }
+    );
+    const treeData = await treeResponse.json();
+    
+    // 5. Create commit
+    const newCommitResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/commits`,
+      {
+        method: 'POST',
+        headers: { ...githubHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: commitMessage,
+          tree: treeData.sha,
+          parents: [baseSha]
+        })
+      }
+    );
+    const newCommitData = await newCommitResponse.json();
+    
+    // 6. Update branch ref
+    await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`,
+      {
+        method: 'PATCH',
+        headers: { ...githubHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sha: newCommitData.sha, force: false })
+      }
+    );
+    
+    return { success: true, commitSha: newCommitData.sha };
+  } catch (e: any) {
+    console.error('Atomic GitHub push failed:', e);
+    return { success: false, error: e.message };
   }
 }
 
@@ -481,7 +740,6 @@ async function executeTool(
     case 'github_clone_repo': {
       const { repo_url, branch = 'main' } = args;
       
-      // Parse repo_url to extract owner/repo
       const match = repo_url.match(/github\.com[\/:]([^\/]+)\/([^\/\.]+)/);
       if (!match) {
         return { result: { error: 'Invalid GitHub URL format' }, context };
@@ -489,21 +747,17 @@ async function executeTool(
       
       const [, owner, repo] = match;
       
-      // If we have a userId, create/use a user-specific branch
       let targetBranch = branch;
       if (context.userId && branch === 'main') {
-        // Create a user-specific branch name
         const userPrefix = context.userId.substring(0, 8);
         targetBranch = `user/${userPrefix}`;
         
-        // Check if branch exists, if not create it from main
         const branchCheckRes = await fetch(
           `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${targetBranch}`,
           { headers: githubHeaders }
         );
         
         if (branchCheckRes.status === 404) {
-          // Get main branch SHA
           const mainRef = await fetch(
             `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/main`,
             { headers: githubHeaders }
@@ -511,7 +765,6 @@ async function executeTool(
           const mainData = await mainRef.json();
           
           if (mainData.object?.sha) {
-            // Create branch from main
             await fetch(
               `https://api.github.com/repos/${owner}/${repo}/git/refs`,
               {
@@ -530,7 +783,6 @@ async function executeTool(
       
       context.currentRepo = { owner, repo: repo.replace('.git', ''), branch: targetBranch };
       
-      // IMMEDIATELY save session with branch info so it persists
       const supabaseUrlEnv = Deno.env.get('SUPABASE_URL');
       const supabaseKeyEnv = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
       if (supabaseUrlEnv && supabaseKeyEnv && context.projectId && context.userId) {
@@ -538,7 +790,6 @@ async function executeTool(
         console.log(`Immediately saved session with branch: ${targetBranch}`);
       }
       
-      // Get file tree
       const response = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/git/trees/${targetBranch}?recursive=1`,
         { headers: githubHeaders }
@@ -551,6 +802,22 @@ async function executeTool(
       
       const files = data.tree?.filter((f: any) => f.type === 'blob').map((f: any) => f.path) || [];
       
+      // Cache package.json
+      try {
+        const pkgResponse = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/package.json?ref=${targetBranch}`,
+          { headers: githubHeaders }
+        );
+        if (pkgResponse.ok) {
+          const pkgData = await pkgResponse.json();
+          const pkgContent = atob(pkgData.content.replace(/\n/g, ''));
+          context.packageJson = JSON.parse(pkgContent);
+          console.log('Cached package.json with', Object.keys(context.packageJson.dependencies || {}).length, 'dependencies');
+        }
+      } catch (e) {
+        console.error('Failed to cache package.json:', e);
+      }
+      
       return {
         result: { 
           cloned: true, 
@@ -558,7 +825,7 @@ async function executeTool(
           repo, 
           branch: targetBranch,
           fileCount: files.length,
-          files: files.slice(0, 50), // Return first 50 files for context
+          files: files.slice(0, 50),
           message: `Repository cloned. Working on your personal branch: ${targetBranch}. This branch is auto-managed - never ask the user about branches.`
         },
         context
@@ -586,27 +853,59 @@ async function executeTool(
       
       const content = data.content ? atob(data.content.replace(/\n/g, '')) : '';
       
-      // Store original content for diff generation
       context.stagedFiles[file_path] = { original: content, modified: content };
       
       return { result: { path: file_path, content, size: data.size }, context };
     }
 
     case 'file_write': {
-      const { file_path, content } = args;
+      const { file_path, content, commit_message } = args;
       
-      // Initialize if needed (new file case)
-      const original = context.stagedFiles[file_path]?.original || '';
-      if (!context.stagedFiles[file_path]) {
-        context.stagedFiles[file_path] = { original: '', modified: content };
-      } else {
-        context.stagedFiles[file_path].modified = content;
+      if (!context.currentRepo) {
+        return { result: { error: 'No repository cloned. Use github_clone_repo first.' }, context };
       }
       
-      // Store change in database for UI display
+      const { owner, repo, branch } = context.currentRepo;
+      
+      // Get original content for diff
+      let originalContent = '';
+      try {
+        const existingRes = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/${file_path}?ref=${branch}`,
+          { headers: githubHeaders }
+        );
+        if (existingRes.ok) {
+          const existingData = await existingRes.json();
+          originalContent = atob(existingData.content.replace(/\n/g, ''));
+        }
+      } catch (e) {
+        // New file
+      }
+      
+      // Generate commit message
+      const msg = commit_message || `Update ${file_path}`;
+      
+      // ATOMIC PUSH TO GITHUB
+      console.log(`[file_write] Atomic push: ${file_path} to ${branch}`);
+      const pushResult = await atomicGitHubPush(owner, repo, branch, file_path, content, msg, githubHeaders);
+      
+      if (!pushResult.success) {
+        return { 
+          result: { 
+            error: `Failed to push to GitHub: ${pushResult.error}`,
+            path: file_path
+          }, 
+          context 
+        };
+      }
+      
+      // Store for local tracking and UI display
+      context.stagedFiles[file_path] = { original: originalContent, modified: content };
+      
+      // Record in database for UI display
       if (supabaseUrl && supabaseKey && context.projectId) {
         try {
-          const diff = generateUnifiedDiff(file_path, original, content);
+          const diff = generateUnifiedDiff(file_path, originalContent, content);
           const additions = diff.split('\n').filter((l: string) => l.startsWith('+') && !l.startsWith('+++')).length;
           const deletions = diff.split('\n').filter((l: string) => l.startsWith('-') && !l.startsWith('---')).length;
           
@@ -622,15 +921,16 @@ async function executeTool(
               project_id: context.projectId,
               conversation_id: context.conversationId || null,
               file_path,
-              status: original ? 'modified' : 'added',
-              original_content: original,
+              status: originalContent ? 'modified' : 'added',
+              original_content: originalContent,
               modified_content: content,
               diff_content: diff,
               additions,
-              deletions
+              deletions,
+              commit_sha: pushResult.commitSha
             })
           });
-          console.log(`Stored code change for ${file_path}`);
+          console.log(`Stored code change for ${file_path} with commit ${pushResult.commitSha}`);
         } catch (e) {
           console.error('Failed to store code change:', e);
         }
@@ -639,9 +939,11 @@ async function executeTool(
       return { 
         result: { 
           written: true, 
+          pushed: true,
           path: file_path,
-          originalSize: context.stagedFiles[file_path].original.length,
-          newSize: content.length
+          commitSha: pushResult.commitSha,
+          branch,
+          message: `File written and pushed to GitHub. Commit: ${pushResult.commitSha?.substring(0, 7)}`
         }, 
         context 
       };
@@ -654,7 +956,6 @@ async function executeTool(
         return { result: { error: 'Deletion not confirmed. Set confirm: true to proceed.' }, context };
       }
       
-      // Mark file for deletion with special marker
       context.stagedFiles[file_path] = { 
         original: context.stagedFiles[file_path]?.original || '', 
         modified: '__DELETE__' 
@@ -673,7 +974,6 @@ async function executeTool(
       const { owner, repo, branch } = context.currentRepo;
       
       if (recursive) {
-        // Use tree API for recursive listing
         const response = await fetch(
           `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
           { headers: githubHeaders }
@@ -694,7 +994,6 @@ async function executeTool(
             size: item.size
           })) || [];
         
-        // Deduplicate directories
         const seen = new Set();
         const uniqueItems = items.filter((item: any) => {
           const key = item.path;
@@ -759,6 +1058,167 @@ async function executeTool(
       return { result: { query, results, total: data.total_count }, context };
     }
 
+    case 'analyze_dependencies': {
+      const { file_path, content: providedContent } = args;
+      
+      if (!context.currentRepo) {
+        return { result: { error: 'No repository cloned. Use github_clone_repo first.' }, context };
+      }
+      
+      const { owner, repo, branch } = context.currentRepo;
+      
+      // Get file content
+      let fileContent = providedContent;
+      if (!fileContent) {
+        const fileRes = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/${file_path}?ref=${branch}`,
+          { headers: githubHeaders }
+        );
+        if (fileRes.ok) {
+          const fileData = await fileRes.json();
+          fileContent = atob(fileData.content.replace(/\n/g, ''));
+        }
+      }
+      
+      if (!fileContent) {
+        return { result: { error: `Could not read file: ${file_path}` }, context };
+      }
+      
+      // Get or refresh package.json
+      if (!context.packageJson) {
+        try {
+          const pkgRes = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/contents/package.json?ref=${branch}`,
+            { headers: githubHeaders }
+          );
+          if (pkgRes.ok) {
+            const pkgData = await pkgRes.json();
+            context.packageJson = JSON.parse(atob(pkgData.content.replace(/\n/g, '')));
+          }
+        } catch (e) {
+          return { result: { error: 'Could not read package.json' }, context };
+        }
+      }
+      
+      const pkg = context.packageJson;
+      const allDeps = {
+        ...(pkg.dependencies || {}),
+        ...(pkg.devDependencies || {}),
+        ...(pkg.peerDependencies || {})
+      };
+      
+      // Analyze imports
+      const imports = analyzeImports(fileContent);
+      const missing: string[] = [];
+      const found: string[] = [];
+      
+      for (const imp of imports) {
+        // Check if it's a built-in or already installed
+        if (allDeps[imp]) {
+          found.push(imp);
+        } else if (!['react', 'react-dom', 'path', 'fs', 'url', 'util', 'events', 'stream', 'crypto', 'http', 'https', 'os', 'child_process'].includes(imp)) {
+          missing.push(imp);
+        }
+      }
+      
+      return {
+        result: {
+          file: file_path,
+          imports,
+          found,
+          missing,
+          hasMissingDeps: missing.length > 0,
+          suggestion: missing.length > 0 
+            ? `Missing packages: ${missing.join(', ')}. Use add_dependency to install them before writing the file.`
+            : 'All dependencies are installed.'
+        },
+        context
+      };
+    }
+
+    case 'add_dependency': {
+      const { package_name, version = 'latest', dev = false } = args;
+      
+      if (!context.currentRepo) {
+        return { result: { error: 'No repository cloned. Use github_clone_repo first.' }, context };
+      }
+      
+      const { owner, repo, branch } = context.currentRepo;
+      
+      // Get current package.json
+      const pkgRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/package.json?ref=${branch}`,
+        { headers: githubHeaders }
+      );
+      
+      if (!pkgRes.ok) {
+        return { result: { error: 'Could not read package.json' }, context };
+      }
+      
+      const pkgData = await pkgRes.json();
+      const pkgContent = atob(pkgData.content.replace(/\n/g, ''));
+      const pkg = JSON.parse(pkgContent);
+      
+      // Determine version to add
+      let versionToAdd = version;
+      if (version === 'latest') {
+        try {
+          const npmRes = await fetch(`https://registry.npmjs.org/${package_name}/latest`);
+          if (npmRes.ok) {
+            const npmData = await npmRes.json();
+            versionToAdd = `^${npmData.version}`;
+          } else {
+            versionToAdd = '*';
+          }
+        } catch (e) {
+          versionToAdd = '*';
+        }
+      }
+      
+      // Add to dependencies
+      const depKey = dev ? 'devDependencies' : 'dependencies';
+      if (!pkg[depKey]) {
+        pkg[depKey] = {};
+      }
+      pkg[depKey][package_name] = versionToAdd;
+      
+      // Sort dependencies alphabetically
+      pkg[depKey] = Object.fromEntries(
+        Object.entries(pkg[depKey]).sort(([a], [b]) => a.localeCompare(b))
+      );
+      
+      // Update package.json
+      const newContent = JSON.stringify(pkg, null, 2) + '\n';
+      
+      // Atomic push
+      const pushResult = await atomicGitHubPush(
+        owner, repo, branch,
+        'package.json',
+        newContent,
+        `Add ${package_name}@${versionToAdd} to ${depKey}`,
+        githubHeaders
+      );
+      
+      if (!pushResult.success) {
+        return { result: { error: `Failed to update package.json: ${pushResult.error}` }, context };
+      }
+      
+      // Update cached package.json
+      context.packageJson = pkg;
+      
+      return {
+        result: {
+          added: true,
+          package: package_name,
+          version: versionToAdd,
+          depType: depKey,
+          commitSha: pushResult.commitSha,
+          message: `Added ${package_name}@${versionToAdd} to ${depKey}. Vercel will install it on next build.`
+        },
+        context
+      };
+    }
+
     case 'generate_diff': {
       const { file_paths } = args;
       const diffs: string[] = [];
@@ -775,7 +1235,6 @@ async function executeTool(
             const diff = generateUnifiedDiff(path, file.original, file.modified);
             diffs.push(diff);
             
-            // Count changes
             const diffLines = diff.split('\n');
             additions += diffLines.filter(l => l.startsWith('+')).length;
             deletions += diffLines.filter(l => l.startsWith('-')).length;
@@ -797,7 +1256,6 @@ async function executeTool(
     case 'git_add_commit_push': {
       const { commit_message } = args;
       
-      // Check for repo context
       if (!context.currentRepo) {
         return { 
           result: { 
@@ -808,27 +1266,25 @@ async function executeTool(
         };
       }
       
-      // Check for staged files - CRITICAL: must use file_write first
+      // Note: With atomic file_write, this is now mainly for batch commits
+      // Check for staged files that haven't been pushed yet
       const stagedCount = Object.keys(context.stagedFiles).length;
       if (stagedCount === 0) {
         return { 
           result: { 
-            error: 'No files staged for commit. You must use file_write to stage changes before committing.',
-            hint: 'WORKFLOW: 1) file_read to get current content, 2) file_write to save your modifications, 3) git_add_commit_push to commit.',
-            staged_files_count: 0,
-            action_required: 'Use file_write to make code changes first. Do NOT just show code in text - that does NOT modify files.'
+            info: 'No additional changes to commit. Note: file_write now pushes immediately.',
+            hint: 'Each file_write already creates a commit. This tool is mainly for batch operations.',
+            staged_files_count: 0
           }, 
           context 
         };
       }
       
       const { owner, repo } = context.currentRepo;
-      // ALWAYS use branch from context - never from args
       const branch = context.currentRepo.branch;
       
       console.log(`Committing ${stagedCount} files to branch: ${branch}`);
       
-      // Get the base branch's latest commit
       const refResponse = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${branch}`,
         { headers: githubHeaders }
@@ -840,7 +1296,6 @@ async function executeTool(
         return { result: { error: `Could not get base commit SHA for branch: ${branch}` }, context };
       }
       
-      // Get the base tree
       const commitResponse = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/git/commits/${baseSha}`,
         { headers: githubHeaders }
@@ -848,16 +1303,14 @@ async function executeTool(
       const commitData = await commitResponse.json();
       const baseTreeSha = commitData.tree?.sha;
       
-      // Create blobs for each modified file
       const treeItems = [];
       for (const [path, file] of Object.entries(context.stagedFiles)) {
         if (file.modified === '__DELETE__') {
-          // For deletions, we don't add to the tree (file will be removed)
           treeItems.push({
             path,
             mode: '100644',
             type: 'blob',
-            sha: null // null sha means delete
+            sha: null
           });
         } else if (file.original !== file.modified) {
           const blobResponse = await fetch(
@@ -882,7 +1335,6 @@ async function executeTool(
         return { result: { error: 'No actual changes to commit (files unchanged)' }, context };
       }
       
-      // Create new tree
       const treeResponse = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/git/trees`,
         {
@@ -893,7 +1345,6 @@ async function executeTool(
       );
       const treeData = await treeResponse.json();
       
-      // Create commit
       const newCommitResponse = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/git/commits`,
         {
@@ -908,25 +1359,21 @@ async function executeTool(
       );
       const newCommitData = await newCommitResponse.json();
       
-      // Create or update branch
-      const branchRef = `refs/heads/${branch}`;
       const checkBranchResponse = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${branch}`,
         { headers: githubHeaders }
       );
       
       if (checkBranchResponse.status === 404) {
-        // Create new branch
         await fetch(
           `https://api.github.com/repos/${owner}/${repo}/git/refs`,
           {
             method: 'POST',
             headers: { ...githubHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ref: branchRef, sha: newCommitData.sha })
+            body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: newCommitData.sha })
           }
         );
       } else {
-        // Update existing branch
         await fetch(
           `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`,
           {
@@ -937,7 +1384,6 @@ async function executeTool(
         );
       }
       
-      // Clear staged files after successful commit
       context.stagedFiles = {};
       
       return {
@@ -954,7 +1400,6 @@ async function executeTool(
     case 'vercel_create_project': {
       const { name, repo, framework = 'vite' } = args;
       
-      // Parse repo if it's a full URL
       let repoPath = repo;
       const match = repo.match(/github\.com[\/:]([^\/]+)\/([^\/\.]+)/);
       if (match) {
@@ -997,7 +1442,6 @@ async function executeTool(
     }
 
     case 'vercel_trigger_deployment': {
-      // Use context values by default, fall back to args
       const projectIdToUse = args.project_id || context.lastVercelProjectId;
       const branchToUse = args.branch || context.currentRepo?.branch || 'main';
       
@@ -1013,7 +1457,6 @@ async function executeTool(
       
       console.log(`Triggering Vercel deployment: project=${projectIdToUse}, branch=${branchToUse}`);
       
-      // First fetch project data to get repoId
       const projectResponse = await fetch(
         `https://api.vercel.com/v9/projects/${projectIdToUse}`,
         { headers: { 'Authorization': `Bearer ${vercelToken}` } }
@@ -1029,7 +1472,6 @@ async function executeTool(
         project: projectIdToUse
       };
       
-      // Only add gitSource if we have the required repoId
       if (projectData.link?.repoId) {
         deploymentBody.gitSource = {
           type: 'github',
@@ -1082,8 +1524,8 @@ async function executeTool(
         return { result: { error: data.error.message }, context };
       }
       
-      // Get build logs if deployment failed
       let buildLogs = null;
+      let parsedError = null;
       if (data.readyState === 'ERROR') {
         try {
           const logsResponse = await fetch(
@@ -1091,7 +1533,8 @@ async function executeTool(
             { headers: { 'Authorization': `Bearer ${vercelToken}` } }
           );
           const logsData = await logsResponse.json();
-          buildLogs = logsData.slice(-20).map((e: any) => e.text || e.payload?.text).filter(Boolean).join('\n');
+          buildLogs = logsData.slice(-50).map((e: any) => e.text || e.payload?.text).filter(Boolean).join('\n');
+          parsedError = parseBuildError(buildLogs);
         } catch (e) {
           console.error('Failed to fetch build logs:', e);
         }
@@ -1103,7 +1546,9 @@ async function executeTool(
           url: data.url,
           ready: data.readyState === 'READY',
           error: data.readyState === 'ERROR',
-          buildLogs
+          buildLogs,
+          parsedError,
+          inspectorUrl: `https://vercel.com/deployments/${deployment_id}`
         },
         context
       };
@@ -1130,7 +1575,21 @@ async function executeTool(
         .filter(Boolean)
         .join('\n');
       
-      return { result: { deployment_id, log_type, logs, eventCount: events.length }, context };
+      const parsedError = parseBuildError(logs);
+      
+      return { 
+        result: { 
+          deployment_id, 
+          log_type, 
+          logs, 
+          eventCount: events.length,
+          parsedError,
+          actionableInsight: parsedError.actionable 
+            ? `Found actionable error: ${parsedError.message}. ${parsedError.type === 'missing_module' ? `Use add_dependency to install ${parsedError.module}` : 'Fix the error in the source file.'}`
+            : null
+        }, 
+        context 
+      };
     }
 
     case 'capture_screenshot': {
@@ -1142,7 +1601,6 @@ async function executeTool(
         selector
       } = args;
       
-      // Use Google PageSpeed Insights API for screenshots (free, no API key needed)
       try {
         const strategy = viewport_width <= 768 ? 'mobile' : 'desktop';
         const apiUrl = new URL('https://www.googleapis.com/pagespeedonline/v5/runPagespeed');
@@ -1153,7 +1611,6 @@ async function executeTool(
         const response = await fetch(apiUrl.toString());
         const data = await response.json();
         
-        // Extract the screenshot from the audit
         const screenshot = data.lighthouseResult?.audits?.['final-screenshot']?.details?.data;
         const fullPageScreenshot = data.lighthouseResult?.audits?.['full-page-screenshot']?.details?.screenshot?.data;
         
@@ -1198,7 +1655,6 @@ async function executeTool(
     case 'analyze_visual_element': {
       const { selector, element_html, computed_styles, bounding_box, user_request, text_content } = args;
       
-      // Parse styles if provided as string
       let styles = {};
       try {
         styles = computed_styles ? JSON.parse(computed_styles) : {};
@@ -1206,7 +1662,6 @@ async function executeTool(
         styles = { raw: computed_styles };
       }
       
-      // Parse bounding box if provided
       let box = {};
       try {
         box = bounding_box ? JSON.parse(bounding_box) : {};
@@ -1214,7 +1669,6 @@ async function executeTool(
         box = { raw: bounding_box };
       }
       
-      // Build analysis context
       const analysis = {
         selector,
         element_summary: {
@@ -1238,7 +1692,6 @@ async function executeTool(
     case 'github_create_pull_request': {
       const { repo_url, head_branch, base_branch, title, body = '' } = args;
       
-      // Parse repo_url
       const match = repo_url.match(/github\.com[\/:]([^\/]+)\/([^\/\.]+)/);
       if (!match) {
         return { result: { error: 'Invalid GitHub URL format' }, context };
@@ -1271,6 +1724,148 @@ async function executeTool(
           prNumber: data.number, 
           prUrl: data.html_url,
           state: data.state
+        },
+        context
+      };
+    }
+
+    case 'autonomous_deploy_and_verify': {
+      const { max_retries = 5 } = args;
+      
+      if (!context.lastVercelProjectId) {
+        return { 
+          result: { error: 'No Vercel project configured. Use vercel_create_project first.' }, 
+          context 
+        };
+      }
+      
+      const branchToUse = context.currentRepo?.branch || 'main';
+      
+      // Trigger initial deployment
+      const { result: deployResult, context: ctx1 } = await executeTool(
+        'vercel_trigger_deployment',
+        { project_id: context.lastVercelProjectId, branch: branchToUse },
+        context
+      );
+      context = ctx1;
+      
+      if (deployResult.error) {
+        return { result: { error: `Deployment trigger failed: ${deployResult.error}` }, context };
+      }
+      
+      const deploymentId = deployResult.deploymentId;
+      let attempt = 0;
+      let lastStatus = 'QUEUED';
+      let finalUrl = deployResult.url;
+      
+      // Poll and auto-fix loop
+      while (attempt < max_retries) {
+        // Wait for build
+        await new Promise(resolve => setTimeout(resolve, 15000));
+        
+        const { result: statusResult, context: ctx2 } = await executeTool(
+          'vercel_get_deployment_status',
+          { deployment_id: deploymentId },
+          context
+        );
+        context = ctx2;
+        
+        lastStatus = statusResult.status;
+        
+        if (statusResult.ready) {
+          finalUrl = statusResult.url;
+          
+          // Take verification screenshot
+          let screenshot = null;
+          if (finalUrl) {
+            try {
+              const { result: ssResult } = await executeTool(
+                'capture_screenshot',
+                { url: `https://${finalUrl}` },
+                context
+              );
+              screenshot = ssResult.screenshot_base64 ? 'captured' : null;
+            } catch (e) {
+              console.error('Screenshot failed:', e);
+            }
+          }
+          
+          return {
+            result: {
+              success: true,
+              status: 'READY',
+              url: finalUrl,
+              deploymentId,
+              attempts: attempt + 1,
+              screenshot,
+              message: `Deployment successful! Preview: https://${finalUrl}`
+            },
+            context
+          };
+        }
+        
+        if (statusResult.error && statusResult.parsedError) {
+          attempt++;
+          console.log(`[autonomous_deploy] Build failed, attempt ${attempt}/${max_retries}`);
+          console.log(`[autonomous_deploy] Error: ${statusResult.parsedError.message}`);
+          
+          // Attempt auto-fix based on error type
+          if (statusResult.parsedError.type === 'missing_module' && statusResult.parsedError.module) {
+            console.log(`[autonomous_deploy] Auto-fixing: adding ${statusResult.parsedError.module}`);
+            const { result: addResult, context: ctx3 } = await executeTool(
+              'add_dependency',
+              { package_name: statusResult.parsedError.module },
+              context
+            );
+            context = ctx3;
+            
+            if (addResult.added) {
+              // Re-trigger deployment
+              const { result: redeployResult, context: ctx4 } = await executeTool(
+                'vercel_trigger_deployment',
+                { project_id: context.lastVercelProjectId, branch: branchToUse },
+                context
+              );
+              context = ctx4;
+              
+              if (redeployResult.deploymentId) {
+                // Continue monitoring new deployment
+                continue;
+              }
+            }
+          }
+          
+          // For other errors, we need AI intervention
+          return {
+            result: {
+              success: false,
+              status: 'ERROR',
+              error: statusResult.parsedError,
+              buildLogs: statusResult.buildLogs,
+              deploymentId,
+              attempts: attempt,
+              needsManualFix: true,
+              suggestion: statusResult.parsedError.actionable 
+                ? `Fix the ${statusResult.parsedError.type} error and retry deployment.`
+                : 'Review the build logs and fix the underlying issue.'
+            },
+            context
+          };
+        }
+        
+        // Still building, continue waiting
+        if (lastStatus === 'BUILDING' || lastStatus === 'QUEUED' || lastStatus === 'INITIALIZING') {
+          continue;
+        }
+      }
+      
+      return {
+        result: {
+          success: false,
+          status: lastStatus,
+          deploymentId,
+          attempts: attempt,
+          message: `Deployment did not complete after ${max_retries} attempts.`
         },
         context
       };
@@ -1311,7 +1906,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    // Load existing session from database
     let existingSession = null;
     let vercelProjectIdFromDb: string | null = null;
     
@@ -1319,7 +1913,6 @@ serve(async (req) => {
       existingSession = await loadAgentSession(supabaseUrl, supabaseKey, projectId, userId);
       console.log('Loaded existing session:', existingSession ? 'found' : 'none');
       
-      // Also fetch Vercel project ID from projects table
       try {
         const projectResponse = await fetch(
           `${supabaseUrl}/rest/v1/projects?id=eq.${projectId}&select=vercel_project_id`,
@@ -1340,7 +1933,6 @@ serve(async (req) => {
       }
     }
     
-    // Parse service account
     const serviceAccountJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON');
     if (!serviceAccountJson) {
       throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON not configured');
@@ -1348,10 +1940,8 @@ serve(async (req) => {
     const serviceAccount = JSON.parse(serviceAccountJson);
     const projectIdGoogle = serviceAccount.project_id;
     
-    // Get access token
     const accessToken = await getGoogleAccessToken(serviceAccount);
     
-    // Initialize tool context from existing session
     let toolContext: ToolContext = { 
       stagedFiles: existingSession?.staged_files || {},
       projectId,
@@ -1359,7 +1949,6 @@ serve(async (req) => {
       userId
     };
     
-    // Restore repo context from session
     if (existingSession?.github_owner && existingSession?.github_repo) {
       toolContext.currentRepo = {
         owner: existingSession.github_owner,
@@ -1368,14 +1957,12 @@ serve(async (req) => {
       };
     }
     
-    // Set Vercel project ID from projects table (priority) or session
     if (vercelProjectIdFromDb) {
       toolContext.lastVercelProjectId = vercelProjectIdFromDb;
     } else if (existingSession?.vercel_project_id) {
       toolContext.lastVercelProjectId = existingSession.vercel_project_id;
     }
     
-    // Auto-clone if repo provided but not in context
     if (githubRepo && !toolContext.currentRepo) {
       console.log('Auto-cloning repository for context:', githubRepo);
       try {
@@ -1390,11 +1977,9 @@ serve(async (req) => {
       }
     }
 
-    // Count staged files for context
     const stagedFilesCount = Object.keys(toolContext.stagedFiles).length;
     const stagedFilesList = Object.keys(toolContext.stagedFiles);
 
-    // Mode-specific instructions
     const modeInstructions = mode === 'chat' 
       ? `## CHAT MODE - PLANNING AND ANALYSIS
 You are in CHAT mode for planning and discussion.
@@ -1409,162 +1994,127 @@ ALLOWED actions (you CAN use these tools):
 - analyze_visual_element - Analyze selected elements
 - vercel_get_deployment_status - Check deployment status
 - get_build_logs - View build logs
+- analyze_dependencies - Check if imports have matching dependencies
 
 BLOCKED actions (do NOT attempt these - tell user to switch to Execute mode):
 - file_write, file_delete
 - git_add_commit_push
 - vercel_create_project, vercel_trigger_deployment
 - github_create_pull_request
+- add_dependency
+- autonomous_deploy_and_verify
 
 START by cloning the repo if not already done, then analyze code and discuss plans.
 If the user asks to make changes, explain what you WOULD do and ask them to switch to Execute mode.`
-      : `## EXECUTION MODE - FULL ACCESS
-You are in EXECUTION mode with full tool access.
+      : `## EXECUTION MODE - FULL AUTONOMOUS ACCESS
 
-### CRITICAL: HOW TO MAKE CODE CHANGES
-**You MUST use the file_write tool to make ANY code changes.**
-Just showing code in your text response does NOT modify files!
+You are a fully autonomous AI coding agent with complete tool access.
 
-**CORRECT WORKFLOW (follow exactly):**
-1. Clone repo if needed → \`github_clone_repo\` (branch is auto-created)
-2. Read the file first → \`file_read\` (REQUIRED before writing)
-3. **MAKE CHANGES using \`file_write\`** → This stages the file for commit
-4. Show diff to user → \`generate_diff\`
-5. Commit changes → \`git_add_commit_push\` (do NOT pass branch argument)
+### CRITICAL: AUTONOMOUS WORKFLOW
 
-**COMMON MISTAKES - DO NOT DO:**
-❌ Showing code in markdown and saying "here are the changes" - this does NOTHING
-❌ Describing what to change without calling file_write
-❌ Asking the user to make changes themselves
-❌ Using git_add_commit_push before using file_write
+**BEFORE writing any file with new imports:**
+1. Use \`analyze_dependencies\` to check if packages are installed
+2. If missing packages found, use \`add_dependency\` FIRST
+3. Then use \`file_write\` (which pushes directly to GitHub)
 
-**CORRECT APPROACH:**
-✅ Read file → Modify content → Call file_write → Show diff → Commit
+**AFTER making changes:**
+1. Use \`autonomous_deploy_and_verify\` to deploy and auto-fix errors
+2. This tool will:
+   - Deploy to Vercel
+   - Monitor build status
+   - If build fails: read logs, identify error, auto-fix, redeploy
+   - Repeat until success or max retries
+   - Take screenshot to verify success
+
+**file_write BEHAVIOR:**
+- Each file_write IMMEDIATELY pushes to GitHub (atomic commit)
+- Vercel auto-deploys from GitHub
+- No need for separate git_add_commit_push for single files
+
+**COMMON WORKFLOW:**
+\`\`\`
+1. Clone repo (if needed)
+2. Read package.json and relevant files
+3. analyze_dependencies on any file with new imports
+4. add_dependency for any missing packages
+5. file_write to make code changes (auto-pushes)
+6. autonomous_deploy_and_verify to deploy and verify
+\`\`\`
+
+**IF BUILD FAILS:**
+- get_build_logs to see the error
+- The logs will include parsedError with actionable insights
+- Fix the issue (missing module? add_dependency. Syntax? fix the file)
+- file_write the fix (auto-pushes)
+- Redeploy
 
 **Current staged files: ${stagedFilesCount}**
 ${stagedFilesCount > 0 
-  ? `Files ready to commit:\n${stagedFilesList.map(f => `  - ${f}`).join('\n')}`
-  : '(none - use file_write to stage changes before committing)'}
+  ? `Files tracked locally:\n${stagedFilesList.map(f => `  - ${f}`).join('\n')}`
+  : '(none - file_write pushes immediately now)'}`;
 
-Always push to your user branch (never directly to main).`;
-
-    // Build comprehensive system prompt per specification
-    // NOTE: This is built AFTER auto-clone so toolContext.currentRepo is populated
-    const systemPrompt = `You are an autonomous AI coding agent for Product Compass, a collaborative product development platform. Your role is to translate natural language requests into precise code changes, deploy previews, and facilitate team approvals.
+    const systemPrompt = `You are an AUTONOMOUS AI coding agent for Product Compass. You translate natural language requests into precise code changes, handle dependencies, deploy previews, and auto-fix build errors.
 
 ${modeInstructions}
 
-## CRITICAL BRANCH RULES - READ CAREFULLY
+## CRITICAL BRANCH RULES
 - Your working branch is: ${toolContext.currentRepo?.branch || '(will be auto-created when you clone)'}
 - **NEVER ask the user which branch to use** - it is ALREADY SET automatically
 - **NEVER ask the user to create a branch** - branches are AUTOMATIC
 - When you clone a repository, your personal user branch is created automatically
-- When you commit with git_add_commit_push, use NO branch argument - it uses your current branch automatically
 - You MUST NOT push to main - only to your auto-assigned user branch
-- The branch in your context is the ONLY branch you should use
 
-## Core Behaviors
+## AUTONOMOUS BEHAVIORS
 
-1. **Minimal Changes Only**: When modifying code, make the smallest possible changes that accomplish the request. Never refactor unrelated code or add unrequested features.
+1. **Dependency Management**: ALWAYS check dependencies before writing files with new imports. Use analyze_dependencies → add_dependency → file_write.
 
-2. **Context Awareness**: Before editing, always read relevant files to understand the existing patterns, imports, and coding style. Match the project's conventions.
+2. **Build Error Recovery**: When deployments fail:
+   - Fetch build logs with get_build_logs
+   - Parse the error (missing module, TypeScript error, syntax error)
+   - Auto-fix by either adding dependencies or fixing code
+   - Redeploy and verify
 
-3. **React/TypeScript Focus**: The codebase uses React, TypeScript, and Tailwind CSS. Generate code that follows these patterns and includes proper type annotations.
+3. **Verification**: After successful deployment, use capture_screenshot to verify the UI looks correct.
 
-4. **Error Recovery**: If a deployment fails, analyze the Vercel build logs, identify the issue, and attempt a fix automatically (up to 3 retries). Report to the user only after exhausting retries.
+4. **Minimal Changes**: Only modify what's necessary. Don't refactor unrelated code.
 
-5. **Clear Communication**: Always explain what you're doing in concise, non-technical language. Show diffs in a readable format before committing.
+## Available Tools
 
-## Workflow
+### File Operations (with GitHub push)
+- file_read - Read a file
+- file_write - Write file AND push to GitHub immediately
+- file_delete - Delete a file
+- list_directory - List directory contents
+- search_code - Search for code patterns
 
-For each user request:
-1. Acknowledge the request and explain your plan
-2. If no repo context, clone the repo (branch is auto-created, don't ask user)
-3. Read relevant files to understand context
-4. Generate minimal code changes
-5. Show the diff to the user for feedback
-6. If approved, commit and push changes using git_add_commit_push (do NOT specify branch - it uses current automatically)
-7. Vercel will automatically deploy the branch
-8. Report when changes are pushed
-9. On approval, create GitHub Pull Request to merge to main
+### Dependency Management
+- analyze_dependencies - Check if imports are in package.json
+- add_dependency - Add a package to package.json and push
 
-## Available Tools (15 total)
+### Deployment
+- vercel_trigger_deployment - Deploy to Vercel
+- vercel_get_deployment_status - Check deployment status
+- get_build_logs - Get detailed build logs with error parsing
+- autonomous_deploy_and_verify - Full auto-deploy with error recovery
+- capture_screenshot - Screenshot deployed site
 
-### Repository Tools
-- github_clone_repo - Clone repository (auto-creates your user branch - NEVER ASK USER ABOUT BRANCHES)
-- file_read - Read file contents (always do this before writing)
-- file_write - Create or modify files
-- file_delete - Remove files (requires confirmation)
-- list_directory - Browse directory structure
-- search_code - Find code patterns across the repo
-- generate_diff - Preview changes before committing
-- git_add_commit_push - Commit and push changes (uses current branch automatically - DO NOT pass branch argument)
-
-### Vercel Tools
-- vercel_create_project - Create new Vercel project from GitHub repo
-- vercel_trigger_deployment - Deploy the project
-- vercel_get_deployment_status - Check deployment progress
-- get_build_logs - Analyze build failures in detail
-
-### Visual Inspection Tools
-- capture_screenshot - Take screenshots of deployed sites
-- analyze_visual_element - Process user-selected elements from the preview
-
-### GitHub Integration
-- github_create_pull_request - Create PR for review (only when user wants to merge to main)
-
-## Visual Editing Workflow
-
-When the user sends a message with visual element context (they selected an element in the preview):
-1. Parse the element info (selector, styles, HTML) from the context
-2. Use search_code to find the component file containing this element
-3. Use file_read to get the full component code
-4. Identify the specific JSX that renders this element
-5. Make targeted changes based on user request
-6. Show diff and push for automatic deployment
-
-## Safety Rules
-
-- Never delete files unless explicitly requested
-- Never expose API keys or secrets in code
-- Never modify .env files or configuration that could break the build
-- If a request seems destructive, ask for confirmation first
-- Always push to user branches, never directly to main
+### Git (for batch operations)
+- git_add_commit_push - Batch commit multiple staged files
+- github_create_pull_request - Create PR to merge to main
 
 ## Current Context
 - GitHub Repository: ${toolContext.currentRepo ? `https://github.com/${toolContext.currentRepo.owner}/${toolContext.currentRepo.repo}` : (githubRepo || 'Not connected')}
 - Current Branch: ${toolContext.currentRepo?.branch || '(auto-created on clone)'}
 - Vercel Project ID: ${toolContext.lastVercelProjectId || 'Not configured'}
-- Staged Files: ${stagedFilesCount} files ready to commit${stagedFilesCount > 0 ? ` (${stagedFilesList.join(', ')})` : ''}
 - Project ID: ${projectId}
-- Conversation ID: ${conversationId}
 
-## DEPLOYMENT RULES - CRITICAL
-**YOUR DEPLOYMENT CONTEXT:**
-- Vercel Project ID: ${toolContext.lastVercelProjectId || 'NOT CONFIGURED'}
-- Deployment Branch: ${toolContext.currentRepo?.branch || 'NOT SET'}
+## DEPLOYMENT QUICK REFERENCE
+**Vercel Project ID: ${toolContext.lastVercelProjectId || 'NOT CONFIGURED'}**
+**Branch: ${toolContext.currentRepo?.branch || 'NOT SET'}**
 
-**IMPORTANT FACTS:**
-1. You CAN deploy EXISTING code on a branch - no new changes required
-2. The branch "${toolContext.currentRepo?.branch || 'user branch'}" ALREADY EXISTS on GitHub with code
-3. Staged files count (${stagedFilesCount}) is for NEW changes only - NOT required for deployment
-4. To deploy, call vercel_trigger_deployment with NO arguments - it auto-uses your context
-
-**WHEN USER SAYS "deploy" or "deploy the project":**
-→ Do NOT ask for branch name or project ID
-→ Do NOT say you need to push changes first (unless user asked you to make code changes)
-→ IMMEDIATELY call: vercel_trigger_deployment() with no arguments
-→ The tool automatically uses: project=${toolContext.lastVercelProjectId}, branch=${toolContext.currentRepo?.branch}
-
-**NEVER SAY THESE THINGS:**
-❌ "I need a branch to deploy to"
-❌ "Please create a branch"  
-❌ "I need to push changes first"
-❌ "I am unable to create a branch"
-❌ "What branch would you like to deploy?"
-
-**CORRECT BEHAVIOR FOR "deploy the project":**
-✅ Immediately call vercel_trigger_deployment tool with empty arguments
+When user says "deploy":
+→ Call vercel_trigger_deployment() with no arguments
+→ Or use autonomous_deploy_and_verify() for full auto-fix loop
 ${visualContext ? `
 ## Visual Element Context (User selected this element)
 - Selector: ${visualContext.selector}
@@ -1572,7 +2122,6 @@ ${visualContext ? `
 - Current Styles: ${JSON.stringify(visualContext.computedStyles || {})}
 ` : ''}`;
 
-    // Build the initial user message, incorporating visual context if present
     let userMessage = message;
     if (visualContext) {
       userMessage = `[Visual Element Selected]
@@ -1585,10 +2134,7 @@ Styles: ${JSON.stringify(visualContext.computedStyles || {}, null, 2)}
 User Request: ${message}`;
     }
 
-    // ==========================================
-    // PHASE M: DEPLOY INTENT SHORTCUT
-    // Bypass LLM entirely for deploy commands
-    // ==========================================
+    // Deploy shortcut
     const deployIntentPatterns = [
       /^deploy$/i,
       /^deploy\s+(the\s+)?project$/i,
@@ -1607,7 +2153,6 @@ User Request: ${message}`;
       branch: toolContext.currentRepo?.branch
     });
     
-    // Check for force deploy intent (bypasses pending changes check)
     const forceDeployPatterns = [
       /^deploy\s+without\s+(pending\s+)?changes$/i,
       /^force\s+deploy$/i,
@@ -1618,7 +2163,6 @@ User Request: ${message}`;
     if ((isDeployIntent || isForceDeployIntent) && mode === 'execution') {
       console.log('[Deploy Shortcut] TRIGGERED - bypassing LLM');
       
-      // Check if we have required context
       if (!toolContext.lastVercelProjectId) {
         return new Response(
           JSON.stringify({
@@ -1631,55 +2175,9 @@ User Request: ${message}`;
         );
       }
       
-      // Check for staged files in memory (not yet committed)
-      const stagedFilesList = Object.keys(toolContext.stagedFiles || {});
-      if (stagedFilesList.length > 0 && !isForceDeployIntent) {
-        console.log('[Deploy Shortcut] Blocked - staged files pending:', stagedFilesList);
-        return new Response(
-          JSON.stringify({
-            response: `⚠️ **Cannot deploy yet - you have ${stagedFilesList.length} staged file(s) not committed:**\n\n` +
-              stagedFilesList.map(f => `- \`${f}\``).join('\n') + '\n\n' +
-              `Please commit these changes first with: **"commit and push the changes"**\n` +
-              `Or deploy without them: **"deploy without pending changes"**`,
-            success: false,
-            mode,
-            shortcut: 'deploy_pending_staged'
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      // Check for unapproved code_changes in database
-      if (!isForceDeployIntent && supabaseUrl && supabaseKey && projectId) {
-        const supabaseClient = createClient(supabaseUrl, supabaseKey);
-        const { data: pendingChanges, error: pendingError } = await supabaseClient
-          .from('code_changes')
-          .select('id, file_path')
-          .eq('project_id', projectId)
-          .is('approved_at', null)
-          .limit(10);
-        
-        if (!pendingError && pendingChanges && pendingChanges.length > 0) {
-          console.log('[Deploy Shortcut] Blocked - unapproved code_changes:', pendingChanges.map((c: { id: string; file_path: string }) => c.file_path));
-          return new Response(
-            JSON.stringify({
-              response: `⚠️ **Cannot deploy yet - you have ${pendingChanges.length} unapproved code change(s):**\n\n` +
-                pendingChanges.map((c: { id: string; file_path: string }) => `- \`${c.file_path}\``).join('\n') + '\n\n' +
-                `Please click **"Approve changes"** in the Preview panel first. This will push the changes to GitHub and automatically trigger a Vercel deployment.\n\n` +
-                `Or deploy the current branch without these changes: **"deploy without pending changes"**`,
-              success: false,
-              mode,
-              shortcut: 'deploy_pending_approval'
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-      }
-      
       const deployBranch = toolContext.currentRepo?.branch || 'main';
       console.log(`[Deploy Shortcut] Deploying project=${toolContext.lastVercelProjectId} branch=${deployBranch}`);
       
-      // Execute deployment directly
       const { result: deployResult, context: updatedContext } = await executeTool(
         'vercel_trigger_deployment',
         { project_id: toolContext.lastVercelProjectId, branch: deployBranch },
@@ -1688,12 +2186,10 @@ User Request: ${message}`;
       
       console.log('[Deploy Shortcut] Deployment result:', deployResult);
       
-      // Save session
       if (supabaseUrl && supabaseKey && projectId && userId) {
         await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, updatedContext, mode);
       }
       
-      // Format response
       let responseText: string;
       if (deployResult.error) {
         responseText = `Deployment failed: ${deployResult.error}`;
@@ -1702,7 +2198,7 @@ User Request: ${message}`;
           `- **Branch:** ${deployBranch}\n` +
           `- **Deployment ID:** ${deployResult.deploymentId || 'pending'}\n` +
           `- **Status:** ${deployResult.status || 'queued'}\n` +
-          (deployResult.url ? `- **Preview URL:** ${deployResult.url}\n` : '') +
+          (deployResult.url ? `- **Preview URL:** https://${deployResult.url}\n` : '') +
           `\nVercel is now building your project. The preview URL will be available once the build completes.`;
       }
       
@@ -1718,11 +2214,7 @@ User Request: ${message}`;
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    // ==========================================
-    // END DEPLOY SHORTCUT
-    // ==========================================
 
-    // Build messages for LLM (Phase L: use systemInstruction instead of user message)
     const messages: any[] = [
       ...history.map((m: any) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
@@ -1731,7 +2223,6 @@ User Request: ${message}`;
       { role: 'user', parts: [{ text: userMessage }] }
     ];
 
-    // Filter tools based on mode
     const activeTools = mode === 'chat'
       ? toolDefinitions.filter(t => chatModeTools.includes(t.name))
       : toolDefinitions;
@@ -1740,16 +2231,12 @@ User Request: ${message}`;
 
     let finalResponse = '';
     let iterations = 0;
-    const maxIterations = 15;
-    let deploymentRetries = 0;
-    const maxDeploymentRetries = 3;
+    const maxIterations = 20; // Increased for autonomous loops
 
-    // Agentic loop - keep processing until no more tool calls
     while (iterations < maxIterations) {
       iterations++;
       console.log(`Agent iteration ${iterations}`);
       
-      // Call Vertex AI
       const vertexUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectIdGoogle}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent`;
       
       const vertexResponse = await fetch(vertexUrl, {
@@ -1759,7 +2246,6 @@ User Request: ${message}`;
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          // Phase L: Use systemInstruction for authoritative system prompt
           systemInstruction: {
             parts: [{ text: systemPrompt }]
           },
@@ -1800,7 +2286,6 @@ User Request: ${message}`;
           
           console.log(`Tool call: ${name}`, args);
           
-          // Double-check mode enforcement (belt and suspenders)
           if (mode === 'chat' && !chatModeTools.includes(name)) {
             toolResults.push({
               functionResponse: {
@@ -1818,45 +2303,24 @@ User Request: ${message}`;
           const { result, context } = await executeTool(name, args || {}, toolContext);
           toolContext = context;
           
-          // Check for deployment failure and trigger retry logic
-          if (name === 'vercel_get_deployment_status' && result.error && deploymentRetries < maxDeploymentRetries) {
-            deploymentRetries++;
-            console.log(`Deployment failed, retry ${deploymentRetries}/${maxDeploymentRetries}`);
-            
-            // Add error context for AI to analyze
-            toolResults.push({
-              functionResponse: {
-                name,
-                response: {
-                  ...result,
-                  retryHint: `This is retry ${deploymentRetries}/${maxDeploymentRetries}. Analyze the build logs and attempt to fix the issue automatically.`
-                }
-              }
-            });
-          } else {
-            toolResults.push({
-              functionResponse: {
-                name,
-                response: result
-              }
-            });
-          }
+          toolResults.push({
+            functionResponse: {
+              name,
+              response: result
+            }
+          });
         }
       }
 
-      // Add assistant response to messages
       messages.push({ role: 'model', parts });
 
-      // If there were tool calls, add the results and continue
       if (hasToolCalls && toolResults.length > 0) {
         messages.push({ role: 'user', parts: toolResults });
       } else {
-        // No more tool calls, we're done
         break;
       }
     }
 
-    // Save session back to database
     if (supabaseUrl && supabaseKey && projectId && userId) {
       await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, toolContext, mode);
       console.log('Saved agent session');
