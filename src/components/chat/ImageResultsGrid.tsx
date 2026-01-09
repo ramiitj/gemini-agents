@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useState } from "react";
 import { Check, ExternalLink, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,11 +18,8 @@ interface ImageResultsGridProps {
   selectedUrls?: string[];
 }
 
-const ImageResultsGrid = ({ 
-  images, 
-  onSelectImage, 
-  selectedUrls = [] 
-}: ImageResultsGridProps) => {
+const ImageResultsGrid = React.forwardRef<HTMLDivElement, ImageResultsGridProps>(
+  ({ images, onSelectImage, selectedUrls = [] }, ref) => {
   const [loadErrors, setLoadErrors] = useState<Set<string>>(new Set());
 
   if (!images || images.length === 0) {
@@ -49,7 +47,7 @@ const ImageResultsGrid = ({
   };
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-2">
+    <div ref={ref} className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-2">
       {images.map((image, index) => {
         const isSelected = selectedUrls.includes(image.link);
         const hasError = loadErrors.has(image.thumbnailLink);
@@ -109,6 +107,8 @@ const ImageResultsGrid = ({
       })}
     </div>
   );
-};
+});
+
+ImageResultsGrid.displayName = "ImageResultsGrid";
 
 export default ImageResultsGrid;

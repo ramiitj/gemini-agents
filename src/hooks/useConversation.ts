@@ -261,7 +261,8 @@ export function useConversation(projectId: string | undefined) {
         status: aiResponse.success ? 'complete' : 'error',
         mode: aiResponse.mode,
         groundingMetadata: aiResponse.groundingMetadata,
-        imageResults: aiResponse.imageResults
+        imageResults: aiResponse.imageResults,
+        codeChanges: aiResponse.codeChanges
       };
 
       setMessages(prev => [...prev, responseMessage]);

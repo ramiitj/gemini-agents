@@ -146,10 +146,24 @@ const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           )}
           
-          {/* Assistant messages: structured blocks */}
-          {!isUser && (
+          {/* Assistant messages: structured blocks (hide when showing image results) */}
+          {!isUser && !(isImageSearch && hasImageResults) && (
             <div className="space-y-1">
               {blocks.map((block, index) => renderBlock(block, index))}
+            </div>
+          )}
+
+          {/* Image results grid for image_search mode - show INSTEAD of text blocks */}
+          {!isUser && isImageSearch && hasImageResults && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Found {message.imageResults!.length} images
+              </p>
+              <ImageResultsGrid
+                images={message.imageResults!}
+                onSelectImage={onPinResult}
+                selectedUrls={pinnedUrls}
+              />
             </div>
           )}
           
@@ -198,17 +212,6 @@ const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
               onPinResult={onPinResult}
               pinnedUrls={pinnedUrls}
             />
-          )}
-
-          {/* Image results grid for image_search mode */}
-          {isImageSearch && hasImageResults && (
-            <div className="mt-4 border-t border-border/50 pt-3">
-              <ImageResultsGrid
-                images={message.imageResults!}
-                onSelectImage={onPinResult}
-                selectedUrls={pinnedUrls}
-              />
-            </div>
           )}
         </div>
       </div>
