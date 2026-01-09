@@ -17,3 +17,22 @@ export interface FileAttachment {
   preview?: string;
   content?: string;
 }
+
+export interface GroundingChunk {
+  web?: {
+    uri: string;
+    title?: string;
+  };
+  retrievedContext?: {
+    uri: string;
+    title?: string;
+  };
+}
+
+export interface GroundingMetadata {
+  groundingChunks?: GroundingChunk[];
+  webSearchQueries?: string[];
+  searchEntryPoint?: {
+    renderedContent?: string;
+  };
+}

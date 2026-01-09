@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
-import type { FileAttachment, SearchAttachment, AgentMode } from "@/types/search";
+import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata } from "@/types/search";
 
 interface Message {
   id: string;
@@ -15,6 +15,8 @@ interface Message {
     diff: string;
   }[];
   status?: "pending" | "complete" | "error";
+  mode?: AgentMode;
+  groundingMetadata?: GroundingMetadata;
 }
 
 interface Conversation {
@@ -235,7 +237,21 @@ export function useConversation(projectId: string | undefined) {
 
       if (aiError) throw aiError;
 
-      // Save AI response to database
+      // For web search mode, add grounding metadata to the response message
+      const responseMessage: Message = {
+        id: `ai-${Date.now()}`,
+        role: 'assistant',
+        content: aiResponse.response || 'I apologize, but I encountered an issue processing your request.',
+        timestamp: new Date(),
+        status: aiResponse.success ? 'complete' : 'error',
+        mode: aiResponse.mode,
+        groundingMetadata: aiResponse.groundingMetadata
+      };
+
+      // Add the AI response message with metadata
+      setMessages(prev => [...prev, responseMessage]);
+
+      // Save AI response to database (without metadata for now - would need schema update)
       const { error: aiMsgError } = await supabase
         .from('messages')
         .insert({

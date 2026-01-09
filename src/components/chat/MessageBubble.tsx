@@ -3,9 +3,13 @@ import { FileCode, Check, Plus, Minus } from "lucide-react";
 import type { Message } from "./ChatContainer";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import SearchResultsPanel from "./SearchResultsPanel";
+import type { SearchAttachment, GroundingMetadata } from "@/types/search";
 
 interface MessageBubbleProps {
   message: Message;
+  onPinResult?: (result: SearchAttachment) => void;
+  pinnedUrls?: string[];
 }
 
 // Strip markdown asterisks from text
@@ -40,7 +44,7 @@ function DiffLine({ line, index }: { line: string; index: number }) {
 }
 
 const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
-  ({ message }, ref) => {
+  ({ message, onPinResult, pinnedUrls = [] }, ref) => {
     if (message.role === "system") {
       return (
         <div ref={ref} className="flex justify-center">
@@ -51,6 +55,8 @@ const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
 
     const isUser = message.role === "user";
     const displayContent = stripMarkdown(message.content);
+    const isWebSearch = message.mode === 'web_search';
+    const hasGroundingData = (message.groundingMetadata?.groundingChunks?.length ?? 0) > 0;
 
     return (
       <div ref={ref} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -64,6 +70,7 @@ const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
         >
           <p className="text-sm whitespace-pre-wrap">{displayContent}</p>
           
+          {/* Code changes section */}
           {message.codeChanges && message.codeChanges.length > 0 && (
             <div className="mt-4 space-y-3 border-t border-border/50 pt-3">
               <div className="text-xs font-medium text-muted-foreground flex items-center gap-2">
@@ -98,6 +105,16 @@ const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Search results panel for web_search mode */}
+          {isWebSearch && hasGroundingData && (
+            <SearchResultsPanel
+              chunks={message.groundingMetadata!.groundingChunks!}
+              searchQueries={message.groundingMetadata?.webSearchQueries}
+              onPinResult={onPinResult}
+              pinnedUrls={pinnedUrls}
+            />
           )}
         </div>
       </div>

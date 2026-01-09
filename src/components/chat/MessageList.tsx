@@ -4,14 +4,23 @@ import MessageBubble from "./MessageBubble";
 import AgentActivityIndicator from "./AgentActivityIndicator";
 import type { Message } from "./ChatContainer";
 import type { AgentActivity } from "@/hooks/useAgentActivity";
+import type { SearchAttachment } from "@/types/search";
 
 interface MessageListProps {
   messages: Message[];
   isTyping: boolean;
   activities?: AgentActivity[];
+  onPinResult?: (result: SearchAttachment) => void;
+  pinnedUrls?: string[];
 }
 
-const MessageList = ({ messages, isTyping, activities = [] }: MessageListProps) => {
+const MessageList = ({ 
+  messages, 
+  isTyping, 
+  activities = [],
+  onPinResult,
+  pinnedUrls = []
+}: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -22,7 +31,12 @@ const MessageList = ({ messages, isTyping, activities = [] }: MessageListProps) 
     <div className="flex-1 overflow-y-auto p-4">
       <div className="space-y-4">
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble 
+            key={message.id} 
+            message={message}
+            onPinResult={onPinResult}
+            pinnedUrls={pinnedUrls}
+          />
         ))}
         
         {isTyping && (
