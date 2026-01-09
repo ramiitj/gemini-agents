@@ -1,4 +1,5 @@
 import { useRef, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import MessageBubble from "./MessageBubble";
 import AgentActivityIndicator from "./AgentActivityIndicator";
 import type { Message } from "./ChatContainer";
@@ -26,16 +27,23 @@ const MessageList = ({ messages, isTyping, activities = [] }: MessageListProps) 
         
         {isTyping && (
           <div className="space-y-3">
-            {activities.length > 0 && (
+            {/* Always show activity indicator when typing - with initial state if empty */}
+            {activities.length > 0 ? (
               <AgentActivityIndicator activities={activities} />
+            ) : (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-border/50">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">Starting agent...</span>
+              </div>
             )}
+            
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span className="flex gap-1">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground delay-75" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground delay-150" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" style={{ animationDelay: '150ms' }} />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" style={{ animationDelay: '300ms' }} />
               </span>
-              <span>AI is thinking...</span>
+              <span>AI is working...</span>
             </div>
           </div>
         )}
