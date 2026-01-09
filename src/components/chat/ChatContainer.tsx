@@ -7,6 +7,7 @@ import { useAgentActivity } from "@/hooks/useAgentActivity";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GitBranch, FileCode } from "lucide-react";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
+import type { Attachment } from "./AttachmentsPreview";
 
 export interface Message {
   id: string;
@@ -25,64 +26,52 @@ export interface VisualContext {
   request: string;
 }
 
-export interface ScreenshotContext {
-  url: string;
-  imageData?: string;
-}
-
 interface ChatContainerProps {
   projectId: string;
   githubRepo?: string | null;
+  previewUrl?: string | null;
   visualContext?: VisualContext | null;
   onVisualContextHandled?: () => void;
-  pendingScreenshot?: ScreenshotContext | null;
-  onScreenshotHandled?: () => void;
 }
 
 const ChatContainer = ({ 
   projectId, 
   githubRepo, 
+  previewUrl,
   visualContext, 
-  onVisualContextHandled,
-  pendingScreenshot,
-  onScreenshotHandled
+  onVisualContextHandled
 }: ChatContainerProps) => {
   const { messages, isLoading, isSending, sendMessage, conversation } = useConversation(projectId);
   const { session, loading: sessionLoading, updateMode } = useAgentSession(projectId);
   const { activities, clearActivities } = useAgentActivity(projectId, conversation?.id);
-  const [localScreenshot, setLocalScreenshot] = useState<ScreenshotContext | null>(null);
 
   // Default to "execution" mode, only use session mode after it loads
   const mode = sessionLoading ? "execution" : (session?.agent_mode as "chat" | "execution") || "execution";
 
-  // Sync external screenshot to local state
-  useEffect(() => {
-    if (pendingScreenshot) {
-      setLocalScreenshot(pendingScreenshot);
-      onScreenshotHandled?.();
-    }
-  }, [pendingScreenshot, onScreenshotHandled]);
-
-  const handleSend = (content: string, screenshotContext?: ScreenshotContext, context?: VisualContext) => {
-    if (sessionLoading) return; // Don't send until session loaded
-    clearActivities(); // Clear old activities before sending new message
+  const handleSend = (content: string, attachments?: Attachment[], context?: VisualContext) => {
+    if (sessionLoading) return;
+    clearActivities();
     
-    // If screenshot context is provided, prepend it to the message
+    // Build message with attachment context
     let messageContent = content;
-    if (screenshotContext?.url) {
-      messageContent = `[Screenshot of ${screenshotContext.url}]\n\n${content}`;
+    if (attachments && attachments.length > 0) {
+      const attachmentInfo = attachments.map(a => {
+        if (a.type === 'screenshot') {
+          return `[Screenshot of ${a.url}]`;
+        } else if (a.content) {
+          return `[File: ${a.name}]\n\`\`\`\n${a.content.substring(0, 2000)}${a.content.length > 2000 ? '...' : ''}\n\`\`\``;
+        } else {
+          return `[Attached: ${a.name}]`;
+        }
+      }).join('\n\n');
+      messageContent = `${attachmentInfo}\n\n${content}`;
     }
     
     sendMessage(messageContent, githubRepo || undefined, context?.element, mode);
-    setLocalScreenshot(null);
   };
 
   const handleModeChange = (newMode: "chat" | "execution") => {
     updateMode(newMode);
-  };
-
-  const handleClearScreenshot = () => {
-    setLocalScreenshot(null);
   };
 
   // Auto-send when visual context is provided
@@ -130,13 +119,12 @@ const ChatContainer = ({
       
       <MessageList messages={messages} isTyping={isSending} activities={activities} />
       <ChatInput 
-        onSend={(content, screenshot) => handleSend(content, screenshot)} 
+        onSend={(content, attachments) => handleSend(content, attachments)} 
+        previewUrl={previewUrl}
         disabled={isSending}
         sessionLoading={sessionLoading}
         mode={mode}
         onModeChange={handleModeChange}
-        pendingScreenshot={localScreenshot}
-        onClearScreenshot={handleClearScreenshot}
       />
     </div>
   );

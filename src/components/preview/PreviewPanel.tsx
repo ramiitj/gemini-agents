@@ -29,11 +29,11 @@ interface PreviewPanelProps {
   onSendToAI?: (element: ElementInfo, request: string) => void;
   onVercelSetup?: (vercelProjectId: string) => void;
   onScreenshotCapture?: (url: string) => void;
+  onPreviewUrlChange?: (url: string | null) => void;
 }
 
-const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, onSendToAI, onVercelSetup, onScreenshotCapture }: PreviewPanelProps) => {
+const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, onSendToAI, onVercelSetup, onScreenshotCapture, onPreviewUrlChange }: PreviewPanelProps) => {
   const [activeTab, setActiveTab] = useState<Tab>("preview");
-  const [showBefore, setShowBefore] = useState(false);
   const [visualEditMode, setVisualEditMode] = useState(false);
   const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
   const [isSettingUpVercel, setIsSettingUpVercel] = useState(false);
@@ -71,6 +71,14 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
     ? (deployment.url.startsWith('http') ? deployment.url : `https://${deployment.url}`)
     : null);
   const previewUrl = rawUrl;
+
+  // Notify parent of URL changes
+  useEffect(() => {
+    onPreviewUrlChange?.(previewUrl);
+  }, [previewUrl, onPreviewUrlChange]);
+
+  // Check if deployment is ready for sharing
+  const deploymentReady = branchDeployment?.state === 'READY' || status === 'deployed';
 
   const handleElementSelected = (element: ElementInfo) => {
     setSelectedElement(element);
@@ -306,30 +314,6 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
                     {rawUrl ? rawUrl.replace("https://", "") : "No deployment yet"}
                   </span>
                 )}
-                
-                {/* Before/After toggle */}
-                <div className="flex rounded-md border border-border bg-background">
-                  <button
-                    onClick={() => setShowBefore(false)}
-                    className={`px-2.5 py-1 text-xs transition-colors ${
-                      !showBefore
-                        ? "bg-muted font-medium text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    After
-                  </button>
-                  <button
-                    onClick={() => setShowBefore(true)}
-                    className={`px-2.5 py-1 text-xs transition-colors ${
-                      showBefore
-                        ? "bg-muted font-medium text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Before
-                  </button>
-                </div>
               </div>
               <div className="flex items-center gap-2">
                 {/* Visual Edit Toggle */}
@@ -397,7 +381,6 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
             ) : previewUrl ? (
               <PreviewFrame 
                 url={previewUrl} 
-                showBefore={showBefore}
                 visualEditMode={visualEditMode}
                 onElementSelected={handleElementSelected}
                 onVisualEditCancel={() => setVisualEditMode(false)}
@@ -441,17 +424,19 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
           Undo
         </Button>
         
-        {/* Share with Team button */}
+        {/* Share with Team button - enabled only when deployment is ready */}
         <Button 
           size="sm" 
           className="ml-auto gap-1.5"
           onClick={() => setShowShareDialog(true)}
-          disabled={pendingChangesCount === 0}
+          disabled={pendingChangesCount === 0 || !deploymentReady}
         >
           <Users className="h-3.5 w-3.5" />
-          {pendingChangesCount > 0 
-            ? `Share ${pendingChangesCount} changes` 
-            : "Share with Team"
+          {!deploymentReady && pendingChangesCount > 0
+            ? "Deploying..."
+            : pendingChangesCount > 0 
+              ? `Share ${pendingChangesCount} changes` 
+              : "Share with Team"
           }
         </Button>
       </div>
