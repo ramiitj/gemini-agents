@@ -2757,23 +2757,25 @@ Format your response as a JSON array of image results.`;
         { role: 'user', parts: [{ text: imageSearchPrompt }] }
       ];
       
-      const imageSearchSystemPrompt = `You are an image search assistant. When asked to find images, search the web and return results in a structured format.
+      const imageSearchSystemPrompt = `You are an image search assistant. Return ONLY valid JSON without markdown formatting or code blocks.
 
-Your response MUST be valid JSON with this structure:
+CRITICAL: Do NOT wrap your response in \`\`\`json or any markdown. Return raw JSON only.
+
+Return this exact structure:
 {
   "images": [
     {
       "title": "Image title or description",
       "link": "Direct URL to the image file",
-      "thumbnailLink": "Thumbnail URL (use the same as link if not available)",
-      "contextLink": "URL of the page containing the image",
-      "displayLink": "Domain name (e.g., example.com)"
+      "thumbnailLink": "Thumbnail URL (use same as link if unavailable)",
+      "contextLink": "URL of the source page",
+      "displayLink": "domain.com"
     }
   ],
-  "summary": "Brief description of what was found"
+  "summary": "Brief description"
 }
 
-Search for high-quality, relevant images. Include diverse results from different sources.`;
+Search for high-quality, relevant images from diverse sources.`;
 
       const vertexUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectIdGoogle}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent`;
       
@@ -2815,14 +2817,21 @@ Search for high-quality, relevant images. Include diverse results from different
       // Try to parse image results from response
       let imageResults: any[] = [];
       try {
-        // Try to extract JSON from the response
-        const jsonMatch = responseText.match(/\{[\s\S]*"images"[\s\S]*\}/);
+        // Strip markdown code blocks before parsing
+        const cleanedResponse = responseText
+          .replace(/```json\s*/gi, '')
+          .replace(/```\s*/g, '')
+          .trim();
+
+        // Try to extract JSON from the cleaned response
+        const jsonMatch = cleanedResponse.match(/\{[\s\S]*"images"[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
           imageResults = parsed.images || [];
+          console.log(`Parsed ${imageResults.length} images from JSON response`);
         }
       } catch (e) {
-        console.log('Could not parse image JSON, using grounding chunks');
+        console.log('Could not parse image JSON, using grounding chunks. Error:', e);
         // Fallback to grounding chunks for image-like results
         imageResults = groundingChunks
           .filter((chunk: any) => {
@@ -2838,6 +2847,14 @@ Search for high-quality, relevant images. Include diverse results from different
             contextLink: chunk.web?.uri,
             displayLink: new URL(chunk.web?.uri).hostname.replace('www.', '')
           }));
+      }
+
+      // Replace raw JSON response with user-friendly message when images are found
+      if (imageResults.length > 0) {
+        responseText = `Found ${imageResults.length} images for "${message}"`;
+      } else if (responseText.includes('"images"')) {
+        // Had JSON but no images parsed
+        responseText = 'No images found for your search. Try a different query.';
       }
       
       // Save session
@@ -2987,13 +3004,21 @@ Search for high-quality, relevant images. Include diverse results from different
         .trim();
     };
 
+    // Collect code changes from staged files for response
+    const codeChanges = Object.entries(toolContext.stagedFiles).map(([filePath, content]: [string, any]) => ({
+      file: filePath,
+      diff: generateUnifiedDiff(filePath, content.original || '', content.modified || ''),
+      action: content.original ? 'modified' : 'added'
+    }));
+
     return new Response(
       JSON.stringify({ 
         response: cleanResponse(finalResponse),
         iterations,
         success: true,
         mode,
-        branch: toolContext.currentRepo?.branch
+        branch: toolContext.currentRepo?.branch,
+        codeChanges: codeChanges.length > 0 ? codeChanges : undefined
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
