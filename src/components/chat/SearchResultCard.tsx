@@ -9,7 +9,7 @@ interface SearchResultCardProps {
   url: string;
   snippet?: string;
   type?: 'link' | 'image' | 'video' | 'doc';
-  onPin?: () => void;
+  onPin?: (snippet?: string) => void;
   isPinned?: boolean;
 }
 
@@ -96,7 +96,7 @@ export default function SearchResultCard({
                     "h-7 w-7 p-0",
                     isPinned && "text-primary bg-primary/10"
                   )}
-                  onClick={onPin}
+                  onClick={() => onPin(snippet)}
                   title={isPinned ? "Unpin" : "Pin for context"}
                 >
                   <Pin className={cn("h-3.5 w-3.5", isPinned && "fill-current")} />
