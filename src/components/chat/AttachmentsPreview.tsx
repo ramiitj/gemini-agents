@@ -1,16 +1,9 @@
 import { X, FileText, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-export interface Attachment {
-  type: 'screenshot' | 'file';
-  name: string;
-  url?: string;
-  preview?: string;
-  content?: string;
-}
+import type { FileAttachment } from "@/types/search";
 
 interface AttachmentsPreviewProps {
-  attachments: Attachment[];
+  attachments: FileAttachment[];
   onRemove: (index: number) => void;
 }
 

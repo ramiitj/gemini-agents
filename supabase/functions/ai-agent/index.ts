@@ -2083,7 +2083,9 @@ serve(async (req) => {
       githubRepo, 
       visualContext,
       mode = 'execution',
-      userId 
+      userId,
+      attachments,
+      searchContext
     } = await req.json();
     
     console.log('AI Agent received request:', { 
@@ -2092,6 +2094,8 @@ serve(async (req) => {
       projectId, 
       githubRepo, 
       hasVisualContext: !!visualContext,
+      hasAttachments: attachments?.length > 0,
+      hasSearchContext: searchContext?.length > 0,
       mode,
       userId: userId?.substring(0, 8) 
     });
@@ -2175,11 +2179,74 @@ serve(async (req) => {
     const stagedFilesCount = Object.keys(toolContext.stagedFiles).length;
     const stagedFilesList = Object.keys(toolContext.stagedFiles);
 
-    const modeInstructions = mode === 'chat' 
-      ? `## CHAT MODE - PLANNING AND ANALYSIS
-You are in CHAT mode for planning and discussion.
+    // Build attachment context for system prompt
+    let attachmentContext = '';
+    if (attachments && attachments.length > 0) {
+      attachmentContext = '\n\n## USER ATTACHMENTS\nThe user has provided the following files/screenshots as context:\n';
+      for (const att of attachments) {
+        if (att.type === 'screenshot') {
+          attachmentContext += `\n### SCREENSHOT of ${att.url || 'preview'}\n`;
+          attachmentContext += `(Image data included for visual analysis - analyze carefully)\n`;
+        } else if (att.content) {
+          const truncated = att.content.length > 5000 
+            ? att.content.slice(0, 5000) + '\n... (truncated)'
+            : att.content;
+          attachmentContext += `\n### FILE: ${att.name}\n`;
+          attachmentContext += `\`\`\`\n${truncated}\n\`\`\`\n`;
+        } else {
+          attachmentContext += `\n- ATTACHED: ${att.name}\n`;
+        }
+      }
+    }
 
-ALLOWED actions (you CAN use these tools):
+    // Build search context for system prompt
+    let searchContextText = '';
+    if (searchContext && searchContext.length > 0) {
+      searchContextText = '\n\n## USER-SELECTED SEARCH RESULTS\nThe user has selected these items as relevant context - use them as primary reference:\n';
+      for (const item of searchContext) {
+        searchContextText += `\n### [${item.type?.toUpperCase() || 'ITEM'}] ${item.title}\n`;
+        if (item.url) searchContextText += `URL: ${item.url}\n`;
+        if (item.filePath) searchContextText += `File: ${item.filePath}\n`;
+        if (item.snippet) {
+          const truncated = item.snippet.length > 2000 
+            ? item.snippet.slice(0, 2000) + '...'
+            : item.snippet;
+          searchContextText += `\`\`\`\n${truncated}\n\`\`\`\n`;
+        }
+      }
+    }
+
+    const modeInstructions = mode === 'chat' 
+      ? `## CHAT MODE - EXPLAIN, PLAN, SEARCH
+
+You are the project's AI pair programmer in CHAT mode. Focus on:
+1. Understanding the request thoroughly
+2. Explaining options and trade-offs clearly
+3. Searching and reading existing code or user-provided context BEFORE answering
+
+### MANDATORY: Use Attachments and Search Results
+
+When the message includes "USER ATTACHMENTS" or "USER-SELECTED SEARCH RESULTS":
+- These are AUTHORITATIVE context provided by the user
+- Read them CAREFULLY before proposing any plan
+- QUOTE file names, snippets, and links when referencing them
+- Do NOT ignore or skip over attached content
+
+### When to Search
+
+If the user asks "where is...", "find...", "show usages...", or needs code location:
+1. Use search_code or list_directory tools FIRST
+2. Show relevant files, paths, and snippets in your response
+3. Do NOT guess - always verify by searching
+
+### Web Search Capabilities
+
+Use the web_search tool to:
+- Find images, videos, and articles for research
+- Gather reference materials and examples
+- Search for documentation and best practices
+
+### ALLOWED actions (you CAN use these tools):
 - github_clone_repo - Clone/access repository to understand the codebase
 - file_read - Read files to analyze code
 - search_code - Search for code patterns
@@ -2190,8 +2257,9 @@ ALLOWED actions (you CAN use these tools):
 - vercel_get_deployment_status - Check deployment status
 - get_build_logs - View build logs
 - analyze_dependencies - Check if imports have matching dependencies
+- web_search - Search the web for reference materials
 
-BLOCKED actions (do NOT attempt these - tell user to switch to Execute mode):
+### BLOCKED actions (do NOT attempt these - tell user to switch to Execute mode):
 - file_write, file_delete
 - git_add_commit_push
 - vercel_create_project, vercel_trigger_deployment
@@ -2199,7 +2267,7 @@ BLOCKED actions (do NOT attempt these - tell user to switch to Execute mode):
 - add_dependency
 - autonomous_deploy_and_verify
 
-START by cloning the repo if not already done, then analyze code and discuss plans.
+Keep responses CONCISE, CONCRETE, and grounded in actual project files and user context.
 If the user asks to make changes, explain what you WOULD do and ask them to switch to Execute mode.`
       : `## EXECUTION MODE - MANDATORY AUTONOMOUS WORKFLOW
 
@@ -2273,6 +2341,15 @@ STEP 5: REPORT TO USER
 ❌ Writing files with new imports without checking dependencies
 ❌ Asking user for branch names, project IDs, or confirmation
 ❌ Skipping the deployment verification step
+❌ Ignoring user attachments or selected search results
+❌ Making assumptions when context is provided - USE IT
+
+### Rule 5: ALWAYS read User Attachments and Search Results
+- When provided, these contain CRITICAL context
+- Read attached files, screenshots, and search results FIRST
+- Use them as PRIMARY reference for your implementation
+- If a screenshot shows a bug, FIX that specific issue
+- If attached code shows expected behavior, MATCH it
 
 ---
 
@@ -2321,6 +2398,8 @@ ${stagedFilesCount > 0
 - Use plain text only for all responses
 - For emphasis, use CAPS or colons instead of markdown
 - Code snippets should be clearly indented or prefixed, not wrapped in backticks unless showing exact code
+${attachmentContext}
+${searchContextText}
 
 ${modeInstructions}
 
