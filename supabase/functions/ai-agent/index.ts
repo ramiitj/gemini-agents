@@ -996,11 +996,25 @@ async function executeTool(
     }
 
     case 'vercel_trigger_deployment': {
-      const { project_id, branch } = args;
+      // Use context values by default, fall back to args
+      const projectIdToUse = args.project_id || context.lastVercelProjectId;
+      const branchToUse = args.branch || context.currentRepo?.branch || 'main';
+      
+      if (!projectIdToUse) {
+        return {
+          result: {
+            error: 'No Vercel project ID available. The project may not be connected to Vercel yet.',
+            hint: 'Use vercel_create_project to set up Vercel deployment first.'
+          },
+          context
+        };
+      }
+      
+      console.log(`Triggering Vercel deployment: project=${projectIdToUse}, branch=${branchToUse}`);
       
       // First fetch project data to get repoId
       const projectResponse = await fetch(
-        `https://api.vercel.com/v9/projects/${project_id}`,
+        `https://api.vercel.com/v9/projects/${projectIdToUse}`,
         { headers: { 'Authorization': `Bearer ${vercelToken}` } }
       );
       const projectData = await projectResponse.json();
@@ -1010,15 +1024,15 @@ async function executeTool(
       }
       
       const deploymentBody: any = {
-        name: project_id,
-        project: project_id
+        name: projectIdToUse,
+        project: projectIdToUse
       };
       
       // Only add gitSource if we have the required repoId
       if (projectData.link?.repoId) {
         deploymentBody.gitSource = {
           type: 'github',
-          ref: branch || 'main',
+          ref: branchToUse,
           repoId: projectData.link.repoId
         };
       }
@@ -1039,13 +1053,15 @@ async function executeTool(
       }
       
       context.lastDeploymentId = data.id;
+      context.lastVercelProjectId = projectIdToUse;
       
       return {
         result: { 
           deploymentId: data.id, 
           url: data.url,
           inspectorUrl: data.inspectorUrl,
-          status: data.status 
+          status: data.status,
+          branch: branchToUse
         },
         context
       };
@@ -1296,9 +1312,31 @@ serve(async (req) => {
     
     // Load existing session from database
     let existingSession = null;
+    let vercelProjectIdFromDb: string | null = null;
+    
     if (supabaseUrl && supabaseKey && projectId && userId) {
       existingSession = await loadAgentSession(supabaseUrl, supabaseKey, projectId, userId);
       console.log('Loaded existing session:', existingSession ? 'found' : 'none');
+      
+      // Also fetch Vercel project ID from projects table
+      try {
+        const projectResponse = await fetch(
+          `${supabaseUrl}/rest/v1/projects?id=eq.${projectId}&select=vercel_project_id`,
+          {
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'apikey': supabaseKey,
+            }
+          }
+        );
+        const projectData = await projectResponse.json();
+        if (projectData?.[0]?.vercel_project_id) {
+          vercelProjectIdFromDb = projectData[0].vercel_project_id;
+          console.log('Loaded Vercel project ID from DB:', vercelProjectIdFromDb);
+        }
+      } catch (e) {
+        console.error('Failed to load Vercel project ID:', e);
+      }
     }
     
     // Parse service account
@@ -1329,7 +1367,10 @@ serve(async (req) => {
       };
     }
     
-    if (existingSession?.vercel_project_id) {
+    // Set Vercel project ID from projects table (priority) or session
+    if (vercelProjectIdFromDb) {
+      toolContext.lastVercelProjectId = vercelProjectIdFromDb;
+    } else if (existingSession?.vercel_project_id) {
       toolContext.lastVercelProjectId = existingSession.vercel_project_id;
     }
     
@@ -1492,9 +1533,17 @@ When the user sends a message with visual element context (they selected an elem
 ## Current Context
 - GitHub Repository: ${toolContext.currentRepo ? `https://github.com/${toolContext.currentRepo.owner}/${toolContext.currentRepo.repo}` : (githubRepo || 'Not connected')}
 - Current Branch: ${toolContext.currentRepo?.branch || '(auto-created on clone)'}
+- Vercel Project ID: ${toolContext.lastVercelProjectId || 'Not configured'}
 - Staged Files: ${stagedFilesCount} files ready to commit${stagedFilesCount > 0 ? ` (${stagedFilesList.join(', ')})` : ''}
 - Project ID: ${projectId}
 - Conversation ID: ${conversationId}
+
+## DEPLOYMENT RULES
+- Vercel Project ID is available: ${toolContext.lastVercelProjectId ? 'YES' : 'NO'}
+- Current branch for deployment: ${toolContext.currentRepo?.branch || 'NOT SET'}
+- **NEVER ask the user for Vercel project ID or branch** - use the values above
+- When deploying, call vercel_trigger_deployment WITHOUT arguments - it uses context automatically
+- Vercel auto-deploys on git push, so manual deployment is rarely needed
 ${visualContext ? `
 ## Visual Element Context (User selected this element)
 - Selector: ${visualContext.selector}
