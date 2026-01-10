@@ -12,7 +12,7 @@ const EmptyProjects = ({ onCreateProject }: EmptyProjectsProps) => {
         <FolderGit2 className="h-8 w-8 text-muted-foreground" />
       </div>
       <h3 className="mt-6 text-xl font-semibold text-foreground">
-        Welcome to Product Compass
+        Welcome to GetHolocron
       </h3>
       <p className="mt-2 max-w-md text-muted-foreground">
         Create your first project to start building with AI. Connect a GitHub repo 

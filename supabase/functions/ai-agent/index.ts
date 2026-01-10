@@ -2439,7 +2439,7 @@ ${stagedFilesCount > 0
   ? 'Files tracked locally:\\n' + stagedFilesList.map(f => '  - ' + f).join('\\n')
   : '(none - file_write pushes immediately)'}`;
 
-    const systemPrompt = `You are an AUTONOMOUS AI coding agent for Product Compass. You translate natural language requests into precise code changes, handle dependencies, deploy previews, and auto-fix build errors.
+    const systemPrompt = `You are an AUTONOMOUS AI coding agent for GetHolocron. You translate natural language requests into precise code changes, handle dependencies, deploy previews, and auto-fix build errors.
 
 ## OUTPUT FORMAT RULES - CRITICAL
 
