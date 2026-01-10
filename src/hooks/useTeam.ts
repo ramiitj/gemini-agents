@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import type { Json } from "@/integrations/supabase/types";
 
 export interface TeamMember {
   id: string;
@@ -68,19 +69,32 @@ export const useTeam = (organizationId: string | null) => {
     fetchTeam();
   }, [organizationId, user]);
 
-  const inviteMember = async (email: string, role: "admin" | "editor" | "viewer") => {
+  const inviteMember = async (
+    email: string, 
+    role: "admin" | "editor" | "viewer",
+    options?: {
+      customRoleId?: string;
+      customPermissions?: Json;
+      inviteeName?: string;
+    }
+  ) => {
     if (!organizationId || !user) {
       return { success: false, message: 'Not authenticated' };
     }
 
+    const insertPayload = {
+      email,
+      role,
+      organization_id: organizationId,
+      invited_by: user.id,
+      custom_role_id: options?.customRoleId ?? undefined,
+      custom_permissions: options?.customPermissions ?? undefined,
+      invitee_name: options?.inviteeName ?? undefined
+    };
+
     const { data, error } = await supabase
       .from("invitations")
-      .insert({
-        email,
-        role,
-        organization_id: organizationId,
-        invited_by: user.id
-      })
+      .insert([insertPayload])
       .select()
       .single();
 
