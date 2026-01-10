@@ -78,24 +78,18 @@ export const useTeam = (organizationId: string | null) => {
       return { success: false, message: 'Not authenticated' };
     }
 
-    const insertData: Record<string, unknown> = {
+    const insertData: any = {
       email,
       role,
       organization_id: organizationId,
-      invited_by: user.id
+      invited_by: user.id,
+      ...(customRoleId ? { custom_role_id: customRoleId } : {}),
+      ...(customPermissions ? { custom_permissions: customPermissions } : {})
     };
-
-    // Add custom role data if provided
-    if (customRoleId) {
-      insertData.custom_role_id = customRoleId;
-    }
-    if (customPermissions) {
-      insertData.custom_permissions = customPermissions;
-    }
 
     const { data, error } = await supabase
       .from("invitations")
-      .insert(insertData)
+      .insert(insertData as any)
       .select()
       .single();
 

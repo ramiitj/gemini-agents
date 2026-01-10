@@ -21,8 +21,8 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useTeam } from "@/hooks/useTeam";
-import { useCustomRoles, CustomRole, Permissions } from "@/hooks/useCustomRoles";
-import CreateRoleModal from "./CreateRoleModal";
+import { useCustomRoles } from "@/hooks/useCustomRoles";
+import type { Permissions } from "@/hooks/useCustomRoles";
 
 interface InviteMemberModalProps {
   open: boolean;
