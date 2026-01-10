@@ -68,7 +68,13 @@ export const useTeam = (organizationId: string | null) => {
     fetchTeam();
   }, [organizationId, user]);
 
-  const inviteMember = async (email: string, role: "admin" | "editor" | "viewer") => {
+  const inviteMember = async (
+    email: string, 
+    role: "admin" | "editor" | "viewer",
+    inviteeName?: string,
+    customRoleId?: string,
+    customPermissions?: Record<string, unknown>
+  ) => {
     if (!organizationId || !user) {
       return { success: false, message: 'Not authenticated' };
     }
@@ -79,7 +85,10 @@ export const useTeam = (organizationId: string | null) => {
         email,
         role,
         organization_id: organizationId,
-        invited_by: user.id
+        invited_by: user.id,
+        invitee_name: inviteeName || null,
+        custom_role_id: customRoleId || null,
+        custom_permissions: customPermissions || null
       })
       .select()
       .single();
