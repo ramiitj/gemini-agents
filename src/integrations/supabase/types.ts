@@ -1063,6 +1063,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_org_member_profiles: {
+        Args: { _org_id: string }
+        Returns: {
+          avatar_url: string
+          full_name: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+        }[]
+      }
       get_user_org_ids: { Args: { _user_id: string }; Returns: string[] }
       has_role: {
         Args: {
