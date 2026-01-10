@@ -2743,18 +2743,27 @@ You help users find information on the web by searching Google and providing com
       }
 
       // Return structured grounding metadata for the frontend
+      // Filter out Vertex redirect URLs - only show original source URLs
+      const cleanedChunks = groundingChunks
+        .filter((chunk: any) => {
+          const uri = chunk.web?.uri || '';
+          // Filter out Vertex redirect URLs
+          return !uri.includes('vertexaisearch.cloud.google.com/grounding-api-redirect');
+        })
+        .map((chunk: any) => ({
+          web: {
+            uri: chunk.web?.uri,
+            title: chunk.web?.title
+          }
+        }));
+      
       return new Response(
         JSON.stringify({ 
           response: responseText,
           success: true,
           mode: 'web_search',
           groundingMetadata: {
-            groundingChunks: groundingChunks.map((chunk: any) => ({
-              web: {
-                uri: chunk.web?.uri,
-                title: chunk.web?.title
-              }
-            })),
+            groundingChunks: cleanedChunks,
             webSearchQueries: groundingMetadata?.webSearchQueries || [],
             searchEntryPoint: groundingMetadata?.searchEntryPoint
           }
@@ -2763,17 +2772,21 @@ You help users find information on the web by searching Google and providing com
       );
     }
 
-    // Image Search Mode - Use Google Custom Search API with OAuth2 service account
+    // Image Search Mode - Use Google Custom Search API with API key
     if (mode === 'image_search') {
-      console.log('Image Search mode - using Google Custom Search API with OAuth2');
+      console.log('Image Search mode - using Google Custom Search API with API key');
       
+      const googleApiKey = Deno.env.get('GOOGLE_SEARCH_API_KEY');
       const searchEngineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID');
       
-      if (!searchEngineId) {
-        console.error('Missing GOOGLE_SEARCH_ENGINE_ID');
+      if (!googleApiKey || !searchEngineId) {
+        console.error('Missing Google Search credentials:', { 
+          hasApiKey: !!googleApiKey, 
+          hasEngineId: !!searchEngineId 
+        });
         return new Response(
           JSON.stringify({ 
-            response: 'Image search requires GOOGLE_SEARCH_ENGINE_ID secret. Please configure it in your backend settings.',
+            response: 'Image search requires GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID secrets. Please configure them in your backend settings.',
             success: false,
             mode: 'image_search',
             imageResults: []
@@ -2782,22 +2795,18 @@ You help users find information on the web by searching Google and providing com
         );
       }
       
-      // Use the existing accessToken from service account (already obtained above)
-      // Call Google Custom Search API with OAuth2 Bearer token
+      // Call Google Custom Search API with API key (OAuth2 does NOT work for this API)
       const searchUrl = `https://www.googleapis.com/customsearch/v1?` +
-        `cx=${encodeURIComponent(searchEngineId)}` +
+        `key=${encodeURIComponent(googleApiKey)}` +
+        `&cx=${encodeURIComponent(searchEngineId)}` +
         `&q=${encodeURIComponent(message)}` +
         `&searchType=image` +
         `&num=10` +
         `&safe=active`;
       
-      console.log('Calling Google Custom Search API with OAuth2 token');
+      console.log('Calling Google Custom Search API with API key');
       
-      const searchResponse = await fetch(searchUrl, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
+      const searchResponse = await fetch(searchUrl);
       const searchData = await searchResponse.json();
       
       console.log('Google Custom Search response status:', searchResponse.status);
