@@ -11,6 +11,15 @@ import Dashboard from "./pages/Dashboard";
 import Project from "./pages/Project";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import AdminAuth from "./pages/AdminAuth";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminBranding from "./pages/admin/AdminBranding";
+import AdminModels from "./pages/admin/AdminModels";
+import AdminBehavior from "./pages/admin/AdminBehavior";
+import AdminBilling from "./pages/admin/AdminBilling";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminLogs from "./pages/admin/AdminLogs";
+import AcceptInvite from "./pages/AcceptInvite";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +37,16 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/project/:id" element={<Project />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/accept-invite/:token" element={<AcceptInvite />} />
+              {/* Admin Routes */}
+              <Route path="/admin" element={<AdminAuth />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/branding" element={<AdminBranding />} />
+              <Route path="/admin/models" element={<AdminModels />} />
+              <Route path="/admin/behavior" element={<AdminBehavior />} />
+              <Route path="/admin/billing" element={<AdminBilling />} />
+              <Route path="/admin/users" element={<AdminUsers />} />
+              <Route path="/admin/logs" element={<AdminLogs />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

@@ -15,6 +15,24 @@ const serviceIcons: Record<string, typeof CreditCard> = {
   storage: HardDrive,
 };
 
+interface PricingData {
+  unit?: string;
+  pricePerUnit?: number;
+  freeQuota?: number;
+}
+
+const getPricing = (pricing: unknown): PricingData => {
+  if (typeof pricing === "object" && pricing !== null) {
+    const p = pricing as Record<string, unknown>;
+    return {
+      unit: typeof p.unit === "string" ? p.unit : "request",
+      pricePerUnit: typeof p.pricePerUnit === "number" ? p.pricePerUnit : 0,
+      freeQuota: typeof p.freeQuota === "number" ? p.freeQuota : 0,
+    };
+  }
+  return { unit: "request", pricePerUnit: 0, freeQuota: 0 };
+};
+
 const AdminBilling = () => {
   const { billing, loading, updateBillingConfig, logActivity } = useAdminSettings();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -36,9 +54,11 @@ const AdminBilling = () => {
     const current = billing.find((b) => b.id === id);
     if (!current) return;
 
+    const currentPricing = getPricing(current.pricing);
+
     await updateBillingConfig(id, {
       pricing: {
-        ...current.pricing,
+        ...currentPricing,
         ...editValues,
       },
     });
@@ -100,9 +120,10 @@ const AdminBilling = () => {
           {billing.map((service) => {
             const Icon = serviceIcons[service.service_key] || CreditCard;
             const isEditing = editingId === service.id;
+            const basePricing = getPricing(service.pricing);
             const pricing = isEditing
-              ? { ...service.pricing, ...editValues }
-              : service.pricing;
+              ? { ...basePricing, ...editValues }
+              : basePricing;
 
             return (
               <Card key={service.id}>
@@ -125,7 +146,7 @@ const AdminBilling = () => {
                       {service.is_active ? "Active" : "Inactive"}
                     </Badge>
                     <Switch
-                      checked={service.is_active}
+                      checked={service.is_active ?? false}
                       onCheckedChange={(checked) =>
                         handleToggle(service.id, checked)
                       }
@@ -143,7 +164,7 @@ const AdminBilling = () => {
                         <Input
                           type="number"
                           step="0.001"
-                          value={pricing.pricePerUnit}
+                          value={pricing.pricePerUnit ?? 0}
                           onChange={(e) => {
                             const value = parseFloat(e.target.value);
                             if (!isEditing) {
@@ -166,7 +187,7 @@ const AdminBilling = () => {
                       <Label>Free Quota ({pricing.unit}s)</Label>
                       <Input
                         type="number"
-                        value={pricing.freeQuota}
+                        value={pricing.freeQuota ?? 0}
                         onChange={(e) => {
                           const value = parseInt(e.target.value);
                           if (!isEditing) {

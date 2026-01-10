@@ -26,6 +26,53 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Check and accept any pending invitations for the user
+  const checkPendingInvitations = async () => {
+    if (!user?.email) return;
+
+    try {
+      // Find pending invitations for this email
+      const { data: invitations, error } = await supabase
+        .from("invitations")
+        .select("*")
+        .eq("email", user.email.toLowerCase())
+        .eq("status", "pending")
+        .gt("expires_at", new Date().toISOString());
+
+      if (error || !invitations?.length) return;
+
+      // Accept each invitation
+      for (const invite of invitations) {
+        // Check if user already has a role in this org
+        const { data: existingRole } = await supabase
+          .from("user_roles")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("organization_id", invite.organization_id)
+          .single();
+
+        if (!existingRole) {
+          // Add user to organization with invited role
+          await supabase.from("user_roles").insert({
+            user_id: user.id,
+            organization_id: invite.organization_id,
+            role: invite.role as "owner" | "admin" | "editor" | "viewer",
+            custom_role_id: invite.custom_role_id,
+            custom_permissions: invite.custom_permissions,
+          });
+        }
+
+        // Mark invitation as accepted
+        await supabase
+          .from("invitations")
+          .update({ status: "accepted" })
+          .eq("id", invite.id);
+      }
+    } catch (error) {
+      console.error("Error processing pending invitations:", error);
+    }
+  };
+
   const fetchOrganizations = async () => {
     if (!user) {
       setOrganizations([]);
@@ -56,7 +103,24 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    fetchOrganizations();
+    const init = async () => {
+      if (!user) {
+        setOrganizations([]);
+        setOrganization(null);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+
+      // First, process any pending invitations BEFORE fetching orgs
+      await checkPendingInvitations();
+
+      // Then fetch organizations (now includes newly joined ones)
+      await fetchOrganizations();
+    };
+
+    init();
   }, [user]);
 
   const setCurrentOrganization = (org: Organization) => {

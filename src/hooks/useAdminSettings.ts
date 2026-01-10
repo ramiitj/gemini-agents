@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
+import type { Json } from "@/integrations/supabase/types";
 
 interface PlatformSettings {
   branding: {
@@ -48,12 +49,8 @@ interface BillingConfig {
   id: string;
   service_key: string;
   service_name: string;
-  pricing: {
-    unit: string;
-    pricePerUnit: number;
-    freeQuota: number;
-  };
-  is_active: boolean;
+  pricing: Json;
+  is_active: boolean | null;
 }
 
 export const useAdminSettings = () => {
