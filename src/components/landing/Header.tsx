@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Compass } from "lucide-react";
+import { HolocronIcon } from "@/components/brand/HolocronIcon";
 import { Link } from "react-router-dom";
 
 const Header = () => {
@@ -13,9 +13,9 @@ const Header = () => {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         {/* Logo */}
         <div className="flex items-center gap-2">
-          <Compass className="h-5 w-5 text-foreground" />
+          <HolocronIcon className="h-5 w-5 text-primary" />
           <span className="text-base font-medium text-foreground">
-            Product Compass
+            GetHolocron
           </span>
         </div>
 

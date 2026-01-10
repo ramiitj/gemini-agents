@@ -55,4 +55,5 @@ const HolocronIcon = ({ className, size = "md" }: HolocronIconProps) => {
   );
 };
 
+export { HolocronIcon };
 export default HolocronIcon;

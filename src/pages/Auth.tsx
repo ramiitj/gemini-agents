@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Compass } from "lucide-react";
+import { HolocronIcon } from "@/components/brand/HolocronIcon";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -80,8 +80,8 @@ const Auth = () => {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
       <Link to="/" className="mb-8 flex items-center gap-2">
-        <Compass className="h-5 w-5 text-foreground" />
-        <span className="text-base font-medium text-foreground">Product Compass</span>
+        <HolocronIcon className="h-5 w-5 text-primary" />
+        <span className="text-base font-medium text-foreground">GetHolocron</span>
       </Link>
 
       <div className="w-full max-w-sm">

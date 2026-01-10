@@ -11,7 +11,7 @@ import { Loader2, Brain, History, Save, RotateCcw } from "lucide-react";
 
 const AdminBehavior = () => {
   const { prompts, loading, updatePrompt, logActivity } = useAdminSettings();
-  const [editingPrompt, setEditingPrompt] = useState<{\
+  const [editingPrompt, setEditingPrompt] = useState<{
     id: string;
     content: string;
   } | null>(null);

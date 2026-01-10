@@ -1,6 +1,7 @@
-import { Compass, FolderGit2, Settings, LogOut } from "lucide-react";
+import { FolderGit2, Settings, LogOut } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { HolocronIcon } from "@/components/brand/HolocronIcon";
 import {
   Sidebar,
   SidebarContent,
@@ -34,9 +35,9 @@ const AppSidebar = () => {
     <Sidebar collapsible="icon" className="border-r border-border">
       <SidebarContent>
         <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-          <Compass className="h-5 w-5 shrink-0 text-foreground" />
+          <HolocronIcon className="h-5 w-5 shrink-0 text-primary" />
           {!collapsed && (
-            <span className="text-sm font-medium text-foreground">Product Compass</span>
+            <span className="text-sm font-medium text-foreground">GetHolocron</span>
           )}
         </div>
 

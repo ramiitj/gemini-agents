@@ -1,4 +1,4 @@
-import { Compass } from "lucide-react";
+import { HolocronIcon } from "@/components/brand/HolocronIcon";
 import { Link } from "react-router-dom";
 
 const Footer = () => {
@@ -9,10 +9,10 @@ const Footer = () => {
           {/* Logo */}
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Compass className="h-5 w-5" />
+              <HolocronIcon className="h-5 w-5" />
             </div>
             <span className="text-lg font-semibold text-foreground">
-              Product Compass
+              GetHolocron
             </span>
           </div>
 
@@ -37,7 +37,7 @@ const Footer = () => {
 
           {/* Copyright */}
           <p className="text-sm text-muted-foreground">
-            © 2026 Product Compass
+            © 2026 GetHolocron
           </p>
         </div>
       </div>
