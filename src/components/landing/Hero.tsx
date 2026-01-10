@@ -6,11 +6,6 @@ const Hero = () => {
   return (
     <section className="relative px-6 py-24 sm:py-32 lg:px-8">
       <div className="mx-auto max-w-3xl text-center">
-        {/* Badge */}
-        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-border bg-muted/50 px-4 py-1.5 text-sm text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-          AI-powered product development
-        </div>
 
         {/* Main headline */}
         <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
