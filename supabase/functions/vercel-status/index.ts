@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { validateAuth } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +12,16 @@ serve(async (req) => {
   }
 
   try {
-    const { deploymentId, teamId } = await req.json();
+    const { deploymentId, teamId, projectId } = await req.json();
+    
+    // Validate authentication - projectId is optional for backward compatibility
+    // but if provided, verify user has access
+    if (projectId) {
+      await validateAuth(req, { projectId, requiredRole: 'viewer' });
+    } else {
+      await validateAuth(req);
+    }
+    
     const vercelToken = Deno.env.get('VERCEL_TOKEN');
     
     if (!vercelToken) {
@@ -67,11 +77,13 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Vercel status error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('Access denied') || message.includes('Authorization') ? 401 : 500;
     return new Response(
-      JSON.stringify({ error: error?.message || 'Unknown error', success: false }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: message, success: false }),
+      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

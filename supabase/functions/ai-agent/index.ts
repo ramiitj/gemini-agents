@@ -2116,10 +2116,70 @@ serve(async (req) => {
       githubRepo, 
       visualContext,
       mode = 'execution',
-      userId,
+      userId: providedUserId,
       attachments,
       searchContext
     } = await req.json();
+    
+    // Validate authentication - require user to have editor+ access to the project
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Missing Authorization header');
+    }
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Supabase configuration missing');
+    }
+    
+    // Create client with user's JWT for RLS enforcement
+    const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    
+    // Verify the user's session
+    const { data: { user }, error: authError } = await userSupabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error('Invalid or expired authentication token');
+    }
+    
+    // Use the authenticated user ID instead of the provided one
+    const userId = user.id;
+    
+    // Verify user has access to the project via RLS
+    if (projectId) {
+      const { data: project, error: projectError } = await userSupabase
+        .from('projects')
+        .select('id, organization_id')
+        .eq('id', projectId)
+        .single();
+      
+      if (projectError || !project) {
+        throw new Error('Project not found or access denied');
+      }
+      
+      // Verify user has at least editor role for mutations
+      const { data: userRole, error: roleError } = await userSupabase
+        .from('user_roles')
+        .select('role')
+        .eq('organization_id', project.organization_id)
+        .eq('user_id', userId)
+        .single();
+      
+      if (roleError || !userRole) {
+        throw new Error('Access denied: no role in organization');
+      }
+      
+      const roleHierarchy = ['viewer', 'editor', 'admin', 'owner'];
+      const userRoleIndex = roleHierarchy.indexOf(userRole.role);
+      // Require at least 'editor' role for AI agent operations
+      if (userRoleIndex < 1) {
+        throw new Error('Access denied: requires editor role or higher');
+      }
+    }
     
     console.log('AI Agent received request:', { 
       message, 
@@ -2133,8 +2193,7 @@ serve(async (req) => {
       userId: userId?.substring(0, 8) 
     });
     
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    // supabaseUrl and supabaseKey already declared above during auth validation
     
     let existingSession = null;
     let vercelProjectIdFromDb: string | null = null;

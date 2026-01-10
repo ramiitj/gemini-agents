@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { validateAuth } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,14 +12,23 @@ serve(async (req) => {
   }
 
   try {
-    const { projectId, ref, teamId } = await req.json();
+    const { projectId: vercelProjectId, ref, teamId, projectId } = await req.json();
+    
+    // Validate authentication - projectId (Supabase project) is optional for backward compatibility
+    // but if provided, verify user has editor+ access (deployments require write access)
+    if (projectId) {
+      await validateAuth(req, { projectId, requiredRole: 'editor' });
+    } else {
+      await validateAuth(req);
+    }
+    
     const vercelToken = Deno.env.get('VERCEL_TOKEN');
     
     if (!vercelToken) {
       throw new Error('VERCEL_TOKEN not configured');
     }
 
-    console.log(`Triggering Vercel deployment for project ${projectId} with ref ${ref}`);
+    console.log(`Triggering Vercel deployment for project ${vercelProjectId} with ref ${ref}`);
 
     // Build the URL with optional team ID
     let url = 'https://api.vercel.com/v13/deployments';
@@ -28,7 +38,7 @@ serve(async (req) => {
 
     // First, get project info to determine deployment approach
     const projectResponse = await fetch(
-      `https://api.vercel.com/v9/projects/${projectId}${teamId ? `?teamId=${teamId}` : ''}`,
+      `https://api.vercel.com/v9/projects/${vercelProjectId}${teamId ? `?teamId=${teamId}` : ''}`,
       { headers: { 'Authorization': `Bearer ${vercelToken}` } }
     );
     
@@ -36,9 +46,10 @@ serve(async (req) => {
     console.log('Project data:', JSON.stringify(projectData, null, 2));
     
     // Build deployment body - omit target for preview deployments
+    // deno-lint-ignore no-explicit-any
     const deploymentBody: any = {
-      name: projectId,
-      project: projectId
+      name: vercelProjectId,
+      project: vercelProjectId
     };
     
     // Only add gitSource if we have the required repoId
@@ -80,11 +91,13 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Vercel deploy error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('Access denied') || message.includes('Authorization') ? 401 : 500;
     return new Response(
-      JSON.stringify({ error: error?.message || 'Unknown error', success: false }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: message, success: false }),
+      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
