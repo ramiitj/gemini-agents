@@ -1,16 +1,22 @@
 import { useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import html2canvas from "html2canvas";
 
 interface ScreenshotButtonProps {
   previewUrl: string | null;
   onScreenshotCaptured: (imageData: string, url: string) => void;
   disabled?: boolean;
+  previewIframeRef?: React.RefObject<HTMLIFrameElement>;
 }
 
-const ScreenshotButton = ({ previewUrl, onScreenshotCaptured, disabled }: ScreenshotButtonProps) => {
+const ScreenshotButton = ({ 
+  previewUrl, 
+  onScreenshotCaptured, 
+  disabled,
+  previewIframeRef 
+}: ScreenshotButtonProps) => {
   const [isCapturing, setIsCapturing] = useState(false);
 
   const captureScreenshot = async () => {
@@ -20,36 +26,45 @@ const ScreenshotButton = ({ previewUrl, onScreenshotCaptured, disabled }: Screen
     }
 
     setIsCapturing(true);
+    
     try {
-      // Use the AI agent's capture_screenshot functionality via PageSpeed API
-      const { data, error } = await supabase.functions.invoke('ai-agent', {
-        body: {
-          message: `capture_screenshot of ${previewUrl}`,
-          mode: 'chat',
-          // Direct tool call
-          directToolCall: {
-            name: 'capture_screenshot',
-            args: { url: previewUrl }
+      // Try to capture from iframe if ref is provided
+      if (previewIframeRef?.current) {
+        try {
+          const iframe = previewIframeRef.current;
+          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+          
+          if (iframeDoc && iframeDoc.body) {
+            const canvas = await html2canvas(iframeDoc.body, {
+              useCORS: true,
+              allowTaint: true,
+              scale: 1,
+              logging: false,
+              width: iframe.clientWidth,
+              height: iframe.clientHeight,
+            });
+            
+            const imageData = canvas.toDataURL("image/png");
+            onScreenshotCaptured(imageData, previewUrl);
+            toast.success("Screenshot captured and attached");
+            return;
           }
+        } catch (iframeError) {
+          // Cross-origin iframe, fall through to alternative method
+          console.log("Cross-origin iframe, using alternative capture method");
         }
-      });
-
-      if (error) throw error;
-
-      // The response should contain the screenshot
-      if (data?.toolResults?.screenshot_base64) {
-        onScreenshotCaptured(data.toolResults.screenshot_base64, previewUrl);
-        toast.success("Screenshot captured! You can now describe what you want to change.");
-      } else {
-        // Fallback: just pass the URL for the AI to screenshot
-        onScreenshotCaptured('', previewUrl);
-        toast.info("Screenshot ready - describe what you want to change");
       }
-    } catch (e: any) {
-      console.error("Screenshot capture failed:", e);
-      // Still allow the user to reference the preview
-      onScreenshotCaptured('', previewUrl || '');
-      toast.info("Ready to reference the preview - describe what you want to change");
+
+      // Fallback: For cross-origin iframes, we can't directly capture
+      // Provide the URL as reference and notify user
+      toast.info("Opening preview for screenshot. Use your browser's screenshot tool.");
+      window.open(previewUrl, "_blank");
+      onScreenshotCaptured("", previewUrl);
+      
+    } catch (error) {
+      console.error("Screenshot capture failed:", error);
+      toast.error("Failed to capture screenshot");
+      onScreenshotCaptured("", previewUrl);
     } finally {
       setIsCapturing(false);
     }
@@ -59,17 +74,21 @@ const ScreenshotButton = ({ previewUrl, onScreenshotCaptured, disabled }: Screen
     <Button
       variant="outline"
       size="sm"
-      className="h-8 gap-1.5 text-xs"
+      className="h-7 gap-1.5 text-xs"
       onClick={captureScreenshot}
-      disabled={disabled || isCapturing || !previewUrl}
-      title="Take screenshot of preview to send to AI"
+      disabled={disabled || !previewUrl || isCapturing}
     >
       {isCapturing ? (
-        <Loader2 className="h-3 w-3 animate-spin" />
+        <>
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Capturing...
+        </>
       ) : (
-        <Camera className="h-3 w-3" />
+        <>
+          <Camera className="h-3 w-3" />
+          Screenshot
+        </>
       )}
-      Screenshot
     </Button>
   );
 };
