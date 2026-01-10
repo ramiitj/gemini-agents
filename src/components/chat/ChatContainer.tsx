@@ -51,6 +51,9 @@ const ChatContainer = ({
   const { session, loading: sessionLoading, updateMode } = useAgentSession(projectId);
   const { activities, clearActivities } = useAgentActivity(projectId, conversation?.id);
   
+  // Track the mode being used for the current pending request
+  const [pendingMode, setPendingMode] = useState<AgentMode | null>(null);
+  
   // Persist pinned results in sessionStorage
   const [pinnedResults, setPinnedResults] = useState<SearchAttachment[]>(() => {
     try {
@@ -70,8 +73,18 @@ const ChatContainer = ({
     }
   }, [pinnedResults, projectId]);
 
+  // Clear pending mode when sending completes
+  useEffect(() => {
+    if (!isSending) {
+      setPendingMode(null);
+    }
+  }, [isSending]);
+
   // Default to "execution" mode, only use session mode after it loads
   const mode: AgentMode = sessionLoading ? "execution" : (session?.agent_mode as AgentMode) || "execution";
+  
+  // Use pendingMode while actively sending, otherwise use session mode
+  const displayMode: AgentMode = pendingMode ?? mode;
 
   const handlePinResult = (result: SearchAttachment) => {
     setPinnedResults(prev => {
@@ -92,6 +105,9 @@ const ChatContainer = ({
   const handleSend = (content: string, attachments?: FileAttachment[], context?: VisualContext) => {
     if (sessionLoading) return;
     clearActivities();
+    
+    // Track the mode being used for this request (for correct loading labels)
+    setPendingMode(mode);
     
     // Combine searchContext with pinned results
     const combinedSearchContext = [...(searchContext || []), ...pinnedResults];
@@ -160,7 +176,7 @@ const ChatContainer = ({
         activities={activities}
         onPinResult={handlePinResult}
         pinnedUrls={pinnedUrls}
-        currentMode={mode}
+        currentMode={displayMode}
       />
 
       {/* Pinned results bar */}
