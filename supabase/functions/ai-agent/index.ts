@@ -2345,9 +2345,36 @@ STEP 5: REPORT
 
 ---
 
+## CODE EXECUTION RULES - CRITICAL
+
+### MANDATORY: USE file_write FOR ALL CODE CHANGES
+
+1. NEVER just "show" code changes in text - you MUST call file_write
+2. The code snippets in your response are for USER REFERENCE ONLY
+3. Every code modification REQUIRES a file_write tool call
+4. If you mention "I've updated/modified/changed" a file, file_write MUST have been called
+
+### CORRECT BEHAVIOR:
+   [Calls file_write tool for src/components/SearchBar.tsx]
+   OK. I've pushed the changes to SearchBar.tsx (commit: abc1234).
+   
+   // For reference, the key change:
+   \`\`\`typescript
+   const fuse = new Fuse(items, { keys: ['title'] });
+   \`\`\`
+
+### WRONG BEHAVIOR (FORBIDDEN):
+   "Here's the updated code for SearchBar.tsx:"
+   \`\`\`typescript
+   // ... full file content ...
+   \`\`\`
+   (This does NOT make changes - only file_write commits code!)
+
+---
+
 ## CODE OUTPUT RULES - SNIPPETS ONLY
 
-### When showing code changes:
+### When showing code for user reference:
 
 1. SHOW SNIPPETS, NOT ENTIRE FILES
    - Only display the specific function/section modified
@@ -2367,32 +2394,22 @@ STEP 5: REPORT
    // ... existing imports
    \`\`\`
 
-   ## 1.2 Replace filter logic
-
-   // In src/components/SearchBar.tsx
-
-   \`\`\`typescript
-   // ... existing setup
-   const fuse = new Fuse(items, { keys: ['title'] });
-   const results = fuse.search(query);
-   // ...
-   \`\`\`
-
 3. EXECUTION SUMMARY (at end):
 
-   OK. I've updated SearchBar.tsx with fuzzy search.
+   OK. I've pushed 2 files (commits: abc123, def456).
+   
+   Changes:
+   - SearchBar.tsx: Added fuzzy search
+   - package.json: Added fuse.js
 
-   Changes made:
-   - Added fuse.js import
-   - Replaced filter with Fuse search
-
-   Deployment URL: https://...
+   Deployment: https://...
 
 ### FORBIDDEN IN OUTPUT:
 - Pasting entire 100+ line files
 - Repeating unchanged code
 - Long explanations between code blocks
 - Asterisks or any markdown emphasis
+- Claiming changes without file_write calls
 
 ---
 
@@ -2924,6 +2941,7 @@ You help users find information on the web by searching Google and providing com
     let finalResponse = '';
     let iterations = 0;
     const maxIterations = 20; // Increased for autonomous loops
+    const executedTools: string[] = []; // Track all tool calls
 
     while (iterations < maxIterations) {
       iterations++;
@@ -2943,7 +2961,7 @@ You help users find information on the web by searching Google and providing com
           },
           contents: messages,
           tools: [{ functionDeclarations: activeTools }],
-          toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
+          toolConfig: { functionCallingConfig: { mode: 'ANY' } },
           generationConfig: {
             temperature: 0.2,
             maxOutputTokens: 8192
@@ -2977,6 +2995,7 @@ You help users find information on the web by searching Google and providing com
           const { name, args } = part.functionCall;
           
           console.log(`Tool call: ${name}`, args);
+          executedTools.push(name);
           
           if (mode === 'chat' && !chatModeTools.includes(name)) {
             toolResults.push({
@@ -3011,6 +3030,19 @@ You help users find information on the web by searching Google and providing com
       } else {
         break;
       }
+    }
+
+    // Log execution summary
+    console.log(`[Agent Summary] Iterations: ${iterations}, Tools executed: ${executedTools.join(', ') || 'none'}`);
+
+    // Verify code changes were actually executed (consistency check)
+    const mentionedCodeChanges = finalResponse.match(/I've (updated|modified|changed|added|wrote|created|pushed)/i);
+    const fileWriteExecuted = executedTools.includes('file_write');
+    const actuallyPushed = Object.keys(toolContext.stagedFiles).length > 0;
+
+    if (mentionedCodeChanges && !fileWriteExecuted && !actuallyPushed && mode === 'execution') {
+      console.warn('[AGENT CONSISTENCY CHECK] Agent claimed to make code changes but no file_write executed');
+      finalResponse += '\n\n⚠️ Note: The code changes shown above are for reference only. To apply them, please ask me to "apply these changes now".';
     }
 
     if (supabaseUrl && supabaseKey && projectId && userId) {
