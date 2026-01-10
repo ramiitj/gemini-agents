@@ -457,13 +457,19 @@ function analyzeImports(content: string): string[] {
 }
 
 // Get Google OAuth access token from service account
-async function getGoogleAccessToken(serviceAccount: any): Promise<string> {
+async function getGoogleAccessToken(
+  serviceAccount: any, 
+  scopes: string | string[] = 'https://www.googleapis.com/auth/cloud-platform'
+): Promise<string> {
   const header = { alg: 'RS256', typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
   
+  // Convert scopes to space-delimited string
+  const scopeString = Array.isArray(scopes) ? scopes.join(' ') : scopes;
+  
   const claim = {
     iss: serviceAccount.client_email,
-    scope: 'https://www.googleapis.com/auth/cloud-platform',
+    scope: scopeString,
     aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600
@@ -2772,21 +2778,18 @@ You help users find information on the web by searching Google and providing com
       );
     }
 
-    // Image Search Mode - Use Google Custom Search API with API key
+    // Image Search Mode - Use Google Custom Search API with OAuth2 Bearer token
     if (mode === 'image_search') {
-      console.log('Image Search mode - using Google Custom Search API with API key');
+      console.log('Image Search mode - using Google Custom Search API with OAuth2');
       
-      const googleApiKey = Deno.env.get('GOOGLE_SEARCH_API_KEY');
+      const cseServiceAccountJson = Deno.env.get('GOOGLE_CSE_SERVICE_ACCOUNT_JSON');
       const searchEngineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID');
       
-      if (!googleApiKey || !searchEngineId) {
-        console.error('Missing Google Search credentials:', { 
-          hasApiKey: !!googleApiKey, 
-          hasEngineId: !!searchEngineId 
-        });
+      if (!cseServiceAccountJson) {
+        console.error('Missing GOOGLE_CSE_SERVICE_ACCOUNT_JSON secret');
         return new Response(
           JSON.stringify({ 
-            response: 'Image search requires GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID secrets. Please configure them in your backend settings.',
+            response: 'Image search requires GOOGLE_CSE_SERVICE_ACCOUNT_JSON secret. Please configure it in your backend settings.',
             success: false,
             mode: 'image_search',
             imageResults: []
@@ -2795,27 +2798,11 @@ You help users find information on the web by searching Google and providing com
         );
       }
       
-      // Call Google Custom Search API with API key (OAuth2 does NOT work for this API)
-      const searchUrl = `https://www.googleapis.com/customsearch/v1?` +
-        `key=${encodeURIComponent(googleApiKey)}` +
-        `&cx=${encodeURIComponent(searchEngineId)}` +
-        `&q=${encodeURIComponent(message)}` +
-        `&searchType=image` +
-        `&num=10` +
-        `&safe=active`;
-      
-      console.log('Calling Google Custom Search API with API key');
-      
-      const searchResponse = await fetch(searchUrl);
-      const searchData = await searchResponse.json();
-      
-      console.log('Google Custom Search response status:', searchResponse.status);
-      
-      if (searchData.error) {
-        console.error('Google Custom Search error:', searchData.error);
+      if (!searchEngineId) {
+        console.error('Missing GOOGLE_SEARCH_ENGINE_ID secret');
         return new Response(
           JSON.stringify({ 
-            response: `Image search failed: ${searchData.error.message}`,
+            response: 'Image search requires GOOGLE_SEARCH_ENGINE_ID secret. Please configure it in your backend settings.',
             success: false,
             mode: 'image_search',
             imageResults: []
@@ -2824,39 +2811,106 @@ You help users find information on the web by searching Google and providing com
         );
       }
       
-      // Parse image results from Google Custom Search response
-      const imageResults = (searchData.items || []).map((item: any) => ({
-        title: item.title || 'Image',
-        link: item.link, // Direct image URL
-        thumbnailLink: item.image?.thumbnailLink || item.link,
-        contextLink: item.image?.contextLink || item.displayLink,
-        displayLink: item.displayLink || new URL(item.link).hostname.replace('www.', '')
-      }));
-      
-      console.log(`Found ${imageResults.length} images from Google Custom Search`);
-      
-      const responseText = imageResults.length > 0
-        ? `Found ${imageResults.length} images for "${message}"`
-        : 'No images found for your search. Try a different query.';
-      
-      // Save session
-      if (supabaseUrl && supabaseKey && projectId && userId) {
-        await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, toolContext, mode);
-      }
-
-      return new Response(
-        JSON.stringify({ 
-          response: responseText,
-          success: true,
-          mode: 'image_search',
-          imageResults,
-          groundingMetadata: {
-            groundingChunks: [],
-            webSearchQueries: [message]
+      try {
+        // Parse CSE service account and get OAuth2 token with CSE scope
+        const cseServiceAccount = JSON.parse(cseServiceAccountJson);
+        console.log('Minting OAuth2 token for CSE with scope: https://www.googleapis.com/auth/cse');
+        
+        const cseAccessToken = await getGoogleAccessToken(
+          cseServiceAccount, 
+          'https://www.googleapis.com/auth/cse'
+        );
+        
+        console.log('CSE OAuth2 token obtained successfully');
+        
+        // Call Google Custom Search API with OAuth2 Bearer token
+        const searchUrl = `https://customsearch.googleapis.com/customsearch/v1?` +
+          `cx=${encodeURIComponent(searchEngineId)}` +
+          `&q=${encodeURIComponent(message)}` +
+          `&searchType=image` +
+          `&num=10` +
+          `&safe=active`;
+        
+        console.log('Calling Google Custom Search API with Bearer token');
+        
+        const searchResponse = await fetch(searchUrl, {
+          headers: {
+            'Authorization': `Bearer ${cseAccessToken}`,
+            'Content-Type': 'application/json'
           }
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+        });
+        
+        const searchData = await searchResponse.json();
+        
+        console.log('Google Custom Search response status:', searchResponse.status);
+        
+        if (!searchResponse.ok || searchData.error) {
+          console.error('Google Custom Search error:', JSON.stringify(searchData.error || searchData));
+          const errorMessage = searchData.error?.message || `HTTP ${searchResponse.status}`;
+          
+          // Provide helpful hints for common errors
+          let hint = '';
+          if (searchResponse.status === 401 || searchResponse.status === 403) {
+            hint = ' - Check that Custom Search API is enabled in the Google Cloud project of the CSE service account.';
+          }
+          
+          return new Response(
+            JSON.stringify({ 
+              response: `Image search failed: ${errorMessage}${hint}`,
+              success: false,
+              mode: 'image_search',
+              imageResults: []
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Parse image results from Google Custom Search response
+        const imageResults = (searchData.items || []).map((item: any) => ({
+          title: item.title || 'Image',
+          link: item.link, // Direct image URL
+          thumbnailLink: item.image?.thumbnailLink || item.link,
+          contextLink: item.image?.contextLink || item.displayLink,
+          displayLink: item.displayLink || new URL(item.link).hostname.replace('www.', '')
+        }));
+        
+        console.log(`Found ${imageResults.length} images from Google Custom Search`);
+        
+        const responseText = imageResults.length > 0
+          ? `Found ${imageResults.length} images for "${message}"`
+          : 'No images found for your search. Try a different query.';
+        
+        // Save session
+        if (supabaseUrl && supabaseKey && projectId && userId) {
+          await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, toolContext, mode);
+        }
+
+        return new Response(
+          JSON.stringify({ 
+            response: responseText,
+            success: true,
+            mode: 'image_search',
+            imageResults,
+            groundingMetadata: {
+              groundingChunks: [],
+              webSearchQueries: [message]
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+        
+      } catch (tokenError) {
+        console.error('Error obtaining CSE OAuth2 token:', tokenError);
+        return new Response(
+          JSON.stringify({ 
+            response: `Image search failed: Could not authenticate with Google CSE. ${tokenError instanceof Error ? tokenError.message : 'Unknown error'}`,
+            success: false,
+            mode: 'image_search',
+            imageResults: []
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // In execution mode, filter out vercel_trigger_deployment to force use of autonomous_deploy_and_verify
