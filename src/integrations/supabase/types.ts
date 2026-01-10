@@ -59,6 +59,68 @@ export type Database = {
           },
         ]
       }
+      admin_activity_log: {
+        Row: {
+          action: string
+          admin_user_id: string | null
+          created_at: string | null
+          details: Json | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+        }
+        Insert: {
+          action: string
+          admin_user_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_activity_log_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_users: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       agent_activity: {
         Row: {
           activity_type: string
@@ -227,6 +289,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      billing_config: {
+        Row: {
+          id: string
+          is_active: boolean | null
+          pricing: Json | null
+          service_key: string
+          service_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          is_active?: boolean | null
+          pricing?: Json | null
+          service_key: string
+          service_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          is_active?: boolean | null
+          pricing?: Json | null
+          service_key?: string
+          service_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       change_requests: {
         Row: {
@@ -649,6 +738,39 @@ export type Database = {
           },
         ]
       }
+      model_config: {
+        Row: {
+          id: string
+          is_active: boolean | null
+          model_key: string
+          model_name: string
+          provider: string
+          settings: Json | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          is_active?: boolean | null
+          model_key: string
+          model_name: string
+          provider: string
+          settings?: Json | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          is_active?: boolean | null
+          model_key?: string
+          model_name?: string
+          provider?: string
+          settings?: Json | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       organizations: {
         Row: {
           created_at: string | null
@@ -670,6 +792,30 @@ export type Database = {
           id?: string
           name?: string
           slug?: string
+        }
+        Relationships: []
+      }
+      platform_settings: {
+        Row: {
+          id: string
+          key: string
+          updated_at: string | null
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          id?: string
+          key: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value?: Json
+        }
+        Update: {
+          id?: string
+          key?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value?: Json
         }
         Relationships: []
       }
@@ -737,6 +883,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      system_prompts: {
+        Row: {
+          description: string | null
+          id: string
+          is_active: boolean | null
+          prompt_content: string
+          prompt_key: string
+          updated_at: string | null
+          updated_by: string | null
+          version: number | null
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          prompt_content: string
+          prompt_key: string
+          updated_at?: string | null
+          updated_by?: string | null
+          version?: number | null
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          prompt_content?: string
+          prompt_key?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          version?: number | null
+        }
+        Relationships: []
       }
       team_comments: {
         Row: {
@@ -893,10 +1072,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
       is_org_member: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "owner" | "admin" | "editor" | "viewer"
