@@ -29,23 +29,36 @@ interface ChangeShareDialogProps {
   changeSummary?: string;
 }
 
-// Generate a natural language summary from file changes
+// Extract clean file name without path and extension
+const getCleanFileName = (filePath: string): string => {
+  const name = filePath.split('/').pop() || filePath;
+  return name.replace(/\.(tsx?|jsx?|css|json)$/, '');
+};
+
+// Format file names as natural language list
+const formatFileNames = (names: string[]): string => {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
+};
+
+// Generate a natural language summary from file changes with specific names
 const generateChangeSummary = (changes: CodeChange[]): string => {
   if (changes.length === 0) return "";
   
   const fileTypes: Record<string, string[]> = {};
   
   changes.forEach(change => {
-    const ext = change.file_path.split('.').pop() || 'file';
-    const name = change.file_path.split('/').pop() || change.file_path;
+    const name = getCleanFileName(change.file_path);
     
-    if (name.includes('component') || change.file_path.includes('/components/')) {
+    if (change.file_path.includes('/components/')) {
       if (!fileTypes['component']) fileTypes['component'] = [];
       fileTypes['component'].push(name);
-    } else if (name.includes('hook') || change.file_path.includes('/hooks/')) {
+    } else if (change.file_path.includes('/hooks/')) {
       if (!fileTypes['hook']) fileTypes['hook'] = [];
       fileTypes['hook'].push(name);
-    } else if (ext === 'css' || change.file_path.includes('styles')) {
+    } else if (change.file_path.includes('.css') || change.file_path.includes('styles')) {
       if (!fileTypes['style']) fileTypes['style'] = [];
       fileTypes['style'].push(name);
     } else if (change.file_path.includes('/pages/')) {
@@ -60,19 +73,23 @@ const generateChangeSummary = (changes: CodeChange[]): string => {
   const parts: string[] = [];
   
   if (fileTypes['component']?.length) {
-    parts.push(`Updated ${fileTypes['component'].length} component${fileTypes['component'].length > 1 ? 's' : ''}`);
+    const names = formatFileNames(fileTypes['component']);
+    parts.push(`Updated ${names} component${fileTypes['component'].length > 1 ? 's' : ''}`);
   }
   if (fileTypes['page']?.length) {
-    parts.push(`Modified ${fileTypes['page'].length} page${fileTypes['page'].length > 1 ? 's' : ''}`);
+    const names = formatFileNames(fileTypes['page']);
+    parts.push(`Modified ${names} page${fileTypes['page'].length > 1 ? 's' : ''}`);
   }
   if (fileTypes['hook']?.length) {
-    parts.push(`Changed ${fileTypes['hook'].length} hook${fileTypes['hook'].length > 1 ? 's' : ''}`);
+    const names = formatFileNames(fileTypes['hook']);
+    parts.push(`Changed ${names} hook${fileTypes['hook'].length > 1 ? 's' : ''}`);
   }
   if (fileTypes['style']?.length) {
     parts.push(`Updated styles`);
   }
   if (fileTypes['other']?.length && parts.length === 0) {
-    parts.push(`Modified ${fileTypes['other'].length} file${fileTypes['other'].length > 1 ? 's' : ''}`);
+    const names = formatFileNames(fileTypes['other']);
+    parts.push(`Modified ${names}`);
   }
   
   return parts.join('. ') + '.';

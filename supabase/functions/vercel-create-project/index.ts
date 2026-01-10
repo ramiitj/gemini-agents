@@ -63,13 +63,15 @@ serve(async (req) => {
     if (githubToken) {
       try {
         const [owner, repoName] = repo.split('/');
+        // Note: X-Frame-Options doesn't support "ALLOWALL" - only DENY, SAMEORIGIN, or ALLOW-FROM
+        // Use Content-Security-Policy frame-ancestors instead (the modern replacement)
         const vercelConfig = {
           headers: [
             {
               source: "/(.*)",
               headers: [
-                { key: "X-Frame-Options", value: "ALLOWALL" },
-                { key: "Content-Security-Policy", value: "frame-ancestors *" }
+                { key: "Content-Security-Policy", value: "frame-ancestors *" },
+                { key: "Access-Control-Allow-Origin", value: "*" }
               ]
             }
           ]

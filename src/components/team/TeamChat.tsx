@@ -12,6 +12,36 @@ import TeamFileUpload, { TeamAttachment, AttachmentPreview, AttachmentDisplay } 
 import TypingIndicator from "./TypingIndicator";
 import { formatDistanceToNow } from "date-fns";
 
+// Render text with clickable URLs
+const renderContentWithLinks = (content: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = content.split(urlRegex);
+  
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      // Clean up trailing punctuation
+      const cleanUrl = part.replace(/[.,;:!?)]+$/, '');
+      const trailing = part.slice(cleanUrl.length);
+      return (
+        <span key={index}>
+          <a
+            href={cleanUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline inline-flex items-center gap-0.5"
+          >
+            {cleanUrl.replace('https://', '').slice(0, 40)}
+            {cleanUrl.length > 40 && '...'}
+            <ExternalLink className="h-3 w-3 inline-block" />
+          </a>
+          {trailing}
+        </span>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
+};
+
 interface TeamChatProps {
   projectId?: string;
   changeRequestId?: string;
@@ -236,7 +266,7 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
         )}
 
         <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">
-          {comment.content}
+          {renderContentWithLinks(comment.content)}
         </p>
 
         {/* Attachments */}
