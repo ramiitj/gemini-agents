@@ -2763,21 +2763,17 @@ You help users find information on the web by searching Google and providing com
       );
     }
 
-    // Image Search Mode - Use Google Custom Search API directly
+    // Image Search Mode - Use Google Custom Search API with OAuth2 service account
     if (mode === 'image_search') {
-      console.log('Image Search mode - using Google Custom Search API directly');
+      console.log('Image Search mode - using Google Custom Search API with OAuth2');
       
-      const googleApiKey = Deno.env.get('GOOGLE_SEARCH_API_KEY');
       const searchEngineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID');
       
-      if (!googleApiKey || !searchEngineId) {
-        console.error('Missing Google Search credentials:', { 
-          hasApiKey: !!googleApiKey, 
-          hasEngineId: !!searchEngineId 
-        });
+      if (!searchEngineId) {
+        console.error('Missing GOOGLE_SEARCH_ENGINE_ID');
         return new Response(
           JSON.stringify({ 
-            response: 'Image search is not configured. Please add GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID secrets.',
+            response: 'Image search requires GOOGLE_SEARCH_ENGINE_ID secret. Please configure it in your backend settings.',
             success: false,
             mode: 'image_search',
             imageResults: []
@@ -2786,18 +2782,22 @@ You help users find information on the web by searching Google and providing com
         );
       }
       
-      // Call Google Custom Search API with searchType=image
+      // Use the existing accessToken from service account (already obtained above)
+      // Call Google Custom Search API with OAuth2 Bearer token
       const searchUrl = `https://www.googleapis.com/customsearch/v1?` +
-        `key=${encodeURIComponent(googleApiKey)}` +
-        `&cx=${encodeURIComponent(searchEngineId)}` +
+        `cx=${encodeURIComponent(searchEngineId)}` +
         `&q=${encodeURIComponent(message)}` +
         `&searchType=image` +
         `&num=10` +
         `&safe=active`;
       
-      console.log('Calling Google Custom Search API for images');
+      console.log('Calling Google Custom Search API with OAuth2 token');
       
-      const searchResponse = await fetch(searchUrl);
+      const searchResponse = await fetch(searchUrl, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
       const searchData = await searchResponse.json();
       
       console.log('Google Custom Search response status:', searchResponse.status);
