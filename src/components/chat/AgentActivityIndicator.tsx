@@ -16,7 +16,9 @@ const activityConfig: Record<string, { icon: React.ElementType; label: string }>
   screenshot: { icon: Camera, label: 'Taking screenshot...' },
   complete: { icon: CheckCircle2, label: 'Complete' },
   searching_images: { icon: Image, label: 'Searching for images...' },
-  searching_web: { icon: Globe, label: 'Searching the web...' }
+  image_search: { icon: Image, label: 'Searching for images...' },
+  searching_web: { icon: Globe, label: 'Searching the web...' },
+  web_search: { icon: Globe, label: 'Searching the web...' }
 };
 
 // Check if activity is stale (>30 seconds with in_progress status)
