@@ -68,10 +68,8 @@ serve(async (req) => {
             {
               source: "/(.*)",
               headers: [
-                // Only use Content-Security-Policy, X-Frame-Options is deprecated
-                // and "ALLOWALL" is not a valid value for X-Frame-Options
-                { key: "Content-Security-Policy", value: "frame-ancestors *" },
-                { key: "Access-Control-Allow-Origin", value: "*" }
+                { key: "X-Frame-Options", value: "ALLOWALL" },
+                { key: "Content-Security-Policy", value: "frame-ancestors *" }
               ]
             }
           ]

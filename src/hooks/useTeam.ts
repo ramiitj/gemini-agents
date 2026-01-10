@@ -68,28 +68,19 @@ export const useTeam = (organizationId: string | null) => {
     fetchTeam();
   }, [organizationId, user]);
 
-  const inviteMember = async (
-    email: string, 
-    role: "admin" | "editor" | "viewer",
-    customRoleId?: string,
-    customPermissions?: Record<string, unknown>
-  ) => {
+  const inviteMember = async (email: string, role: "admin" | "editor" | "viewer") => {
     if (!organizationId || !user) {
       return { success: false, message: 'Not authenticated' };
     }
 
-    const insertData: any = {
-      email,
-      role,
-      organization_id: organizationId,
-      invited_by: user.id,
-      ...(customRoleId ? { custom_role_id: customRoleId } : {}),
-      ...(customPermissions ? { custom_permissions: customPermissions } : {})
-    };
-
     const { data, error } = await supabase
       .from("invitations")
-      .insert(insertData as any)
+      .insert({
+        email,
+        role,
+        organization_id: organizationId,
+        invited_by: user.id
+      })
       .select()
       .single();
 

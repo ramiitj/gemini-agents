@@ -11,7 +11,7 @@ import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import TeamFileUpload, { TeamAttachment, AttachmentPreview, AttachmentDisplay } from "./TeamFileUpload";
 import TypingIndicator from "./TypingIndicator";
 import { formatDistanceToNow } from "date-fns";
-import { renderTextWithLinks } from "@/components/chat/LinkRenderer";
+
 interface TeamChatProps {
   projectId?: string;
   changeRequestId?: string;
@@ -236,7 +236,7 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
         )}
 
         <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">
-          {renderTextWithLinks(comment.content)}
+          {comment.content}
         </p>
 
         {/* Attachments */}
