@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { validateAuth } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,9 +13,17 @@ serve(async (req) => {
   }
 
   try {
-    const { name, githubRepo, framework = 'vite' } = await req.json();
+    const { name, githubRepo, framework = 'vite', projectId } = await req.json();
     
-    console.log('Creating Vercel project:', { name, githubRepo, framework });
+    console.log('Creating Vercel project:', { name, githubRepo, framework, projectId });
+    
+    // Validate authentication - projectId is optional for backward compatibility
+    // but if provided, verify user has editor+ access (creating Vercel projects requires write access)
+    if (projectId) {
+      await validateAuth(req, { projectId, requiredRole: 'editor' });
+    } else {
+      await validateAuth(req);
+    }
     
     const vercelToken = Deno.env.get('VERCEL_TOKEN');
     if (!vercelToken) {
@@ -209,13 +218,14 @@ serve(async (req) => {
   } catch (error: unknown) {
     console.error('Error creating Vercel project:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const status = errorMessage.includes('Access denied') || errorMessage.includes('Authorization') ? 401 : 500;
     return new Response(
       JSON.stringify({ 
         success: false,
         error: errorMessage 
       }),
       { 
-        status: 500, 
+        status, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );

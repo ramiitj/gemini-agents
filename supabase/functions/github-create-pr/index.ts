@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { validateAuth } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +12,16 @@ serve(async (req) => {
   }
 
   try {
-    const { owner, repo, head, base = 'main', title, body = '' } = await req.json();
+    const { owner, repo, head, base = 'main', title, body = '', projectId } = await req.json();
+    
+    // Validate authentication - projectId is optional for backward compatibility
+    // but if provided, verify user has editor+ access
+    if (projectId) {
+      await validateAuth(req, { projectId, requiredRole: 'editor' });
+    } else {
+      await validateAuth(req);
+    }
+    
     const githubToken = Deno.env.get('GITHUB_PAT');
     
     if (!githubToken) {
@@ -61,11 +71,13 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('GitHub create PR error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('Access denied') || message.includes('Authorization') ? 401 : 500;
     return new Response(
-      JSON.stringify({ error: error?.message || 'Unknown error', success: false }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: message, success: false }),
+      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
