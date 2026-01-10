@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { MessageSquare, Reply, Quote, Send, FileCode } from "lucide-react";
-import { renderTextWithLinks } from "@/components/chat/LinkRenderer";
+import { MessageSquare, Reply, Quote, Send, FileCode, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -236,9 +235,9 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
           </div>
         )}
 
-        <div className="mt-1 text-sm text-foreground whitespace-pre-wrap">
-          {renderTextWithLinks(comment.content)}
-        </div>
+        <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">
+          {comment.content}
+        </p>
 
         {/* Attachments */}
         {comment.attachments && comment.attachments.length > 0 && (
