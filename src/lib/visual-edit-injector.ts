@@ -179,16 +179,67 @@ export const VISUAL_EDIT_SCRIPT = `
     positionOverlay(selectedOverlay, target);
     
     const info = getElementInfo(target);
+    
+    // Security: Use specific origin instead of wildcard
+    // Get parent origin from ancestor origins or referrer
+    const parentOrigin = getParentOrigin();
     window.parent.postMessage({
       type: 'VISUAL_EDIT_ELEMENT_SELECTED',
       data: info
-    }, '*');
+    }, parentOrigin);
   }
 
-  // Listen for messages from parent
+  // Get the parent window's origin safely
+  function getParentOrigin() {
+    try {
+      // Try to get from ancestor origins (most reliable)
+      if (window.location.ancestorOrigins && window.location.ancestorOrigins.length > 0) {
+        return window.location.ancestorOrigins[0];
+      }
+      // Fallback to document.referrer
+      if (document.referrer) {
+        const url = new URL(document.referrer);
+        return url.origin;
+      }
+      // Last resort: same origin
+      return window.location.origin;
+    } catch (e) {
+      // If all else fails, use same origin
+      return window.location.origin;
+    }
+  }
+
+  // Allowed message types for security
+  const ALLOWED_MESSAGE_TYPES = ['VISUAL_EDIT_TOGGLE', 'VISUAL_EDIT_CLEAR_SELECTION'];
+
+  // Listen for messages from parent with origin validation
   window.addEventListener('message', (e) => {
+    // Validate message origin
+    const expectedOrigin = getParentOrigin();
+    
+    // Allow same-origin and expected parent origin
+    if (e.origin !== expectedOrigin && e.origin !== window.location.origin) {
+      // In development, also allow localhost variants
+      const isLocalDev = e.origin.includes('localhost') || e.origin.includes('127.0.0.1');
+      const targetIsLocalDev = expectedOrigin.includes('localhost') || expectedOrigin.includes('127.0.0.1');
+      if (!(isLocalDev && targetIsLocalDev)) {
+        console.warn('[Visual Edit] Rejected message from untrusted origin:', e.origin);
+        return;
+      }
+    }
+
+    // Validate message structure and type
+    if (!e.data || typeof e.data !== 'object' || typeof e.data.type !== 'string') {
+      return;
+    }
+
+    // Only process allowed message types
+    if (!ALLOWED_MESSAGE_TYPES.includes(e.data.type)) {
+      return;
+    }
+
     if (e.data.type === 'VISUAL_EDIT_TOGGLE') {
-      isActive = e.data.active;
+      isActive = !!e.data.active;
       if (!isActive) {
         hideOverlay(highlightOverlay);
         hideOverlay(selectedOverlay);
@@ -203,10 +254,11 @@ export const VISUAL_EDIT_SCRIPT = `
   document.addEventListener('mousemove', handleMouseMove, true);
   document.addEventListener('click', handleClick, true);
 
-  // Send ready signal
-  window.parent.postMessage({ type: 'VISUAL_EDIT_READY' }, '*');
+  // Send ready signal with specific origin
+  const parentOrigin = getParentOrigin();
+  window.parent.postMessage({ type: 'VISUAL_EDIT_READY' }, parentOrigin);
 
-  console.log('[Visual Edit] Initialized');
+  console.log('[Visual Edit] Initialized with secure postMessage');
 })();
 `;
 
