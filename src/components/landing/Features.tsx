@@ -1,47 +1,47 @@
-import { MessageSquare, Eye, GitPullRequest, Users, Zap, Shield } from "lucide-react";
+import { Search, Image, GitBranch, Users, Eye, Rocket } from "lucide-react";
 
 const features = [
   {
-    icon: MessageSquare,
-    title: "Natural Language to Code",
+    icon: Search,
+    title: "Integrated Web & Image Search",
     description:
-      "Describe what you want in plain English. Our AI understands context, analyzes your codebase, and generates clean, minimal changes.",
-    benefit: "No coding required",
+      "Research docs, competitors, and UI patterns while planning. Search results become context for AI, grounding every suggestion in real sources.",
+    benefit: "Deep context",
+  },
+  {
+    icon: GitBranch,
+    title: "Your Private Experiment Space",
+    description:
+      "Try your ideas without affecting anyone else. See exactly how changes look in production before you share them with the team.",
+    benefit: "Risk-free exploration",
   },
   {
     icon: Eye,
-    title: "Live Previews",
+    title: "Live Production Previews",
     description:
-      "See your changes rendered instantly before committing. Every edit triggers a preview deployment so you know exactly what you're shipping.",
-    benefit: "Instant feedback",
+      "Every change triggers an instant preview deployment. No staging servers, no waiting—see exactly what users will see.",
+    benefit: "Real results",
   },
   {
-    icon: GitPullRequest,
-    title: "One-Click Deploy",
+    icon: Image,
+    title: "Share When You're Ready",
     description:
-      "When you're happy with the preview, approve it. We handle the git commit, push, and pull request creation automatically.",
-    benefit: "Zero DevOps",
+      "Built your idea? Preview looks good? Share it with your team in one click. They see your vision, not just a description.",
+    benefit: "Show, don't tell",
   },
   {
     icon: Users,
-    title: "Team Workflows",
+    title: "Team Reviews with Context",
     description:
-      "Set up approval chains. Designers, developers, and PMs can all contribute, review, and comment before anything goes live.",
-    benefit: "Built for teams",
+      "Teammates see your live preview, comment, suggest changes. Everyone can iterate on actual working code, not mockups.",
+    benefit: "Real collaboration",
   },
   {
-    icon: Zap,
-    title: "Context-Aware AI",
+    icon: Rocket,
+    title: "One-Click to Production",
     description:
-      "Upload screenshots, reference existing code, or describe visual changes. The AI understands your entire project context.",
-    benefit: "Smart suggestions",
-  },
-  {
-    icon: Shield,
-    title: "Version Control Built-in",
-    description:
-      "Every change is tracked. Undo mistakes instantly, compare versions, and maintain a complete history of your project evolution.",
-    benefit: "Never lose work",
+      "Approved by the team? Ship it. Git commits, branches, and PRs happen automatically.",
+    benefit: "Zero DevOps",
   },
 ];
 
@@ -56,10 +56,10 @@ const Features = ({ id }: FeaturesProps) => {
         {/* Section header */}
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Everything you need to ship faster
+            Think. Experiment. Share.
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            From idea to production in minutes, not days. No complex setup, no learning curve.
+            Every team member gets their own space to try ideas and see them live—then share when ready.
           </p>
         </div>
 
