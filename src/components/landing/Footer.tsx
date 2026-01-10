@@ -1,4 +1,5 @@
 import { Compass } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Footer = () => {
   return (
@@ -17,18 +18,21 @@ const Footer = () => {
 
           {/* Links */}
           <nav className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
-            <a href="#" className="transition-colors hover:text-foreground">
-              Privacy
-            </a>
-            <a href="#" className="transition-colors hover:text-foreground">
-              Terms
-            </a>
-            <a href="#" className="transition-colors hover:text-foreground">
-              Documentation
-            </a>
-            <a href="#" className="transition-colors hover:text-foreground">
-              Contact
-            </a>
+            <Link to="/auth" className="transition-colors hover:text-foreground">
+              Sign in
+            </Link>
+            <button
+              onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
+              className="transition-colors hover:text-foreground"
+            >
+              Features
+            </button>
+            <button
+              onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
+              className="transition-colors hover:text-foreground"
+            >
+              How it works
+            </button>
           </nav>
 
           {/* Copyright */}

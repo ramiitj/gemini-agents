@@ -102,12 +102,15 @@ const ChatContainer = ({
 
   const pinnedUrls = pinnedResults.map(r => r.url).filter(Boolean) as string[];
 
-  const handleSend = (content: string, attachments?: FileAttachment[], context?: VisualContext) => {
+  const handleSend = (content: string, attachments?: FileAttachment[], context?: VisualContext, overrideMode?: AgentMode) => {
     if (sessionLoading) return;
     clearActivities();
     
+    // Use overrideMode if provided (for mode-specific actions), otherwise use current mode
+    const modeToUse = overrideMode ?? mode;
+    
     // Track the mode being used for this request (for correct loading labels)
-    setPendingMode(mode);
+    setPendingMode(modeToUse);
     
     // Combine searchContext with pinned results
     const combinedSearchContext = [...(searchContext || []), ...pinnedResults];
@@ -117,7 +120,7 @@ const ChatContainer = ({
       content, 
       githubRepo || undefined, 
       context?.element, 
-      mode,
+      modeToUse,
       attachments,
       combinedSearchContext.length > 0 ? combinedSearchContext : undefined
     );

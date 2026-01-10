@@ -3,6 +3,11 @@ import { Compass } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Header = () => {
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    element?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-sm">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
@@ -16,24 +21,18 @@ const Header = () => {
 
         {/* Navigation */}
         <nav className="hidden items-center gap-8 md:flex">
-          <a
-            href="#features"
+          <button
+            onClick={() => scrollToSection("features")}
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             Features
-          </a>
-          <a
-            href="#how-it-works"
+          </button>
+          <button
+            onClick={() => scrollToSection("how-it-works")}
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             How it works
-          </a>
-          <a
-            href="#pricing"
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Pricing
-          </a>
+          </button>
         </nav>
 
         {/* Auth buttons */}
