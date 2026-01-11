@@ -16,7 +16,7 @@ interface OrganizationContextType {
   hasInitialized: boolean;
   setCurrentOrganization: (org: Organization) => void;
   createOrganization: (name: string) => Promise<Organization | null>;
-  refetch: () => Promise<void>;
+  refetch: () => Promise<Organization[]>;
 }
 
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
@@ -75,12 +75,11 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const fetchOrganizations = async () => {
+  const fetchOrganizations = async (): Promise<Organization[]> => {
     if (!user) {
       setOrganizations([]);
       setOrganization(null);
-      setLoading(false);
-      return;
+      return [];
     }
 
     const { data, error } = await supabase
@@ -90,18 +89,18 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
 
     if (error) {
       console.error("Error fetching organizations:", error);
-      setLoading(false);
-      return;
+      return [];
     }
 
-    setOrganizations(data || []);
+    const orgs = data || [];
+    setOrganizations(orgs);
     
     // Set first org as current if none selected
-    if (data && data.length > 0 && !organization) {
-      setOrganization(data[0]);
+    if (orgs.length > 0 && !organization) {
+      setOrganization(orgs[0]);
     }
     
-    setLoading(false);
+    return orgs;
   };
 
   useEffect(() => {
@@ -120,7 +119,11 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
       await checkPendingInvitations();
 
       // Then fetch organizations (now includes newly joined ones)
-      await fetchOrganizations();
+      // CRITICAL: Set hasInitialized AFTER orgs are fetched to prevent flicker
+      const orgs = await fetchOrganizations();
+      
+      // Only mark as initialized after we have the org data
+      setLoading(false);
       setHasInitialized(true);
     };
 

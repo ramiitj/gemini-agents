@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 interface CreateOrganizationModalProps {
   open: boolean;
@@ -43,8 +44,9 @@ const CreateOrganizationModal = ({
   return (
     <Dialog open={open} onOpenChange={isOnboarding ? undefined : onOpenChange}>
       <DialogContent
-        className="sm:max-w-md"
+        className={cn("sm:max-w-md", isOnboarding && "[&>button]:hidden")}
         onInteractOutside={isOnboarding ? (e) => e.preventDefault() : undefined}
+        onEscapeKeyDown={isOnboarding ? (e) => e.preventDefault() : undefined}
       >
         <DialogHeader>
           <DialogTitle>
