@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
-import { RefreshCw, ExternalLink, AlertCircle } from "lucide-react";
+import { RefreshCw, ExternalLink, AlertCircle, Copy } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import VisualEditOverlay from "./VisualEditOverlay";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
@@ -114,7 +115,26 @@ const PreviewFrame = ({
 }`}
             </pre>
           </div>
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-2 mt-3 flex-wrap justify-center">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                const config = `{
+  "headers": [{
+    "source": "/(.*)",
+    "headers": [
+      { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
+    ]
+  }]
+}`;
+                navigator.clipboard.writeText(config);
+                toast.success("Config copied to clipboard");
+              }}
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Copy Config
+            </Button>
             <Button variant="outline" size="sm" onClick={handleRefresh}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Retry
