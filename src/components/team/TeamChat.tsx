@@ -133,9 +133,14 @@ const TeamChat = ({ projectId, changeRequestId, title }: TeamChatProps) => {
             ))}
           </div>
         ) : comments.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8">
-            <MessageSquare className="h-6 w-6 mx-auto mb-2" />
-            <p className="text-sm">No messages yet. Start the discussion!</p>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+              <MessageSquare className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <h3 className="text-sm font-medium text-foreground mb-1">No messages yet</h3>
+            <p className="text-xs text-muted-foreground max-w-[200px]">
+              Start a discussion with your team about this project.
+            </p>
           </div>
         ) : (
           <div className="space-y-4">

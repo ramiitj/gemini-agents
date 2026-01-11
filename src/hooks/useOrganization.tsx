@@ -13,6 +13,7 @@ interface OrganizationContextType {
   organization: Organization | null;
   organizations: Organization[];
   loading: boolean;
+  hasInitialized: boolean;
   setCurrentOrganization: (org: Organization) => void;
   createOrganization: (name: string) => Promise<Organization | null>;
   refetch: () => Promise<void>;
@@ -25,6 +26,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   // Check and accept any pending invitations for the user
   const checkPendingInvitations = async () => {
@@ -108,6 +110,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
         setOrganizations([]);
         setOrganization(null);
         setLoading(false);
+        setHasInitialized(true);
         return;
       }
 
@@ -118,6 +121,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
 
       // Then fetch organizations (now includes newly joined ones)
       await fetchOrganizations();
+      setHasInitialized(true);
     };
 
     init();
@@ -163,6 +167,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
         organization,
         organizations,
         loading,
+        hasInitialized,
         setCurrentOrganization,
         createOrganization,
         refetch: fetchOrganizations,
