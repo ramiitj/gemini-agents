@@ -1063,6 +1063,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_all_profiles_admin: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          username: string
+        }[]
+      }
       get_org_member_profiles: {
         Args: { _org_id: string }
         Returns: {

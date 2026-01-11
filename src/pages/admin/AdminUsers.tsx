@@ -66,10 +66,9 @@ const AdminUsers = () => {
 
   const fetchUsers = async () => {
     try {
+      // Use admin-only RPC to fetch all profiles securely
       const { data: profilesData, error: profilesError } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .rpc("get_all_profiles_admin");
 
       if (profilesError) throw profilesError;
       setUsers(profilesData || []);
@@ -100,14 +99,17 @@ const AdminUsers = () => {
 
     setAdding(true);
     try {
-      // Find user by email
-      const { data: userData, error: userError } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("email", newAdminEmail)
-        .single();
+      // Find user by email using admin RPC (since direct profiles access is restricted)
+      const { data: allProfiles, error: profilesError } = await supabase
+        .rpc("get_all_profiles_admin");
 
-      if (userError || !userData) {
+      if (profilesError) throw profilesError;
+
+      const userData = allProfiles?.find(
+        (p: User) => p.email?.toLowerCase() === newAdminEmail.toLowerCase()
+      );
+
+      if (!userData) {
         toast({
           title: "User not found",
           description: "No user found with that email address.",
