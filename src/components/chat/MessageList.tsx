@@ -3,9 +3,16 @@ import { Loader2, Image, Globe, MessageSquare, Rocket, Palette } from "lucide-re
 import { cn } from "@/lib/utils";
 import MessageBubble from "./MessageBubble";
 import AgentActivityIndicator from "./AgentActivityIndicator";
+import DesignStudioPanel from "./DesignStudioPanel";
 import type { Message } from "./ChatContainer";
 import type { AgentActivity } from "@/hooks/useAgentActivity";
 import type { SearchAttachment, AgentMode, DesignOutput } from "@/types/search";
+
+interface DesignContext {
+  imageUrl: string;
+  prompt: string;
+  code?: string;
+}
 
 interface MessageListProps {
   messages: Message[];
@@ -15,6 +22,10 @@ interface MessageListProps {
   pinnedUrls?: string[];
   currentMode?: AgentMode;
   onUseDesignContext?: (design: DesignOutput, type: 'image' | 'code') => void;
+  designContext?: DesignContext | null;
+  onOpenImportModal?: () => void;
+  onOpenGalleryModal?: () => void;
+  onClearDesignContext?: () => void;
 }
 
 const getModeLoadingConfig = (mode?: AgentMode) => {
@@ -65,7 +76,11 @@ const MessageList = ({
   onPinResult,
   pinnedUrls = [],
   currentMode,
-  onUseDesignContext
+  onUseDesignContext,
+  designContext,
+  onOpenImportModal,
+  onOpenGalleryModal,
+  onClearDesignContext
 }: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -137,6 +152,16 @@ const MessageList = ({
             onUseDesignContext={onUseDesignContext}
           />
         ))}
+
+        {/* Design Studio Panel - shown when in design mode */}
+        {currentMode === 'design' && !isTyping && (
+          <DesignStudioPanel
+            onOpenImportModal={onOpenImportModal || (() => {})}
+            onOpenGalleryModal={onOpenGalleryModal || (() => {})}
+            designContext={designContext}
+            onClearContext={onClearDesignContext}
+          />
+        )}
         
         {isTyping && (
           <div className="space-y-3">
