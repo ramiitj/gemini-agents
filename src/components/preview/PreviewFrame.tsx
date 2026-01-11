@@ -96,13 +96,25 @@ const PreviewFrame = ({
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <AlertCircle className="h-6 w-6 text-muted-foreground" />
           </div>
-          <div className="max-w-sm text-center">
+          <div className="max-w-md text-center">
             <p className="text-sm font-medium text-foreground">Preview cannot load</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              The deployment may need to be rebuilt with iframe headers
+            <p className="mt-2 text-xs text-muted-foreground">
+              The deployed site is blocking iframe embedding. To fix this, add a{" "}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">vercel.json</code>{" "}
+              file to your repo with:
             </p>
+            <pre className="mt-2 rounded-lg border border-border bg-muted/50 p-3 text-left text-[10px] font-mono text-muted-foreground overflow-x-auto">
+{`{
+  "headers": [{
+    "source": "/(.*)",
+    "headers": [
+      { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
+    ]
+  }]
+}`}
+            </pre>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mt-2">
             <Button variant="outline" size="sm" onClick={handleRefresh}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Retry

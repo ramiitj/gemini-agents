@@ -14,13 +14,13 @@ export const useUnreadMessages = (projectId: string | null) => {
       return;
     }
 
-    // Get user's last read timestamp
+    // Get user's last read timestamp - use maybeSingle() to handle no existing record
     const { data: readStatus } = await supabase
       .from("chat_read_status")
       .select("last_read_at")
       .eq("project_id", projectId)
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     const lastReadAt = readStatus?.last_read_at || new Date(0).toISOString();
 
