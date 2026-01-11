@@ -63,64 +63,59 @@ const ChatInput = ({
 
   return (
     <form onSubmit={handleSubmit} className="border-t border-border">
-      {/* Action Bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/20">
-        <div className="flex items-center gap-1">
-          <ChatScreenshotButton
-            previewUrl={previewUrl || null}
-            onCapture={handleScreenshotCapture}
-            disabled={disabled}
-          />
-          <ChatFileUpload
-            onFilesSelected={handleFilesSelected}
-            disabled={disabled}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          {onModeChange && (
-            <ModeToggle
-              mode={mode}
-              onModeChange={onModeChange}
-              disabled={disabled}
-            />
-          )}
-          <span className="text-xs text-muted-foreground">
-            {mode === "web_search" ? "Searching" : mode === "chat" ? "Planning" : "Executing"}
-          </span>
-        </div>
-      </div>
-
       {/* Attachments Preview */}
       <AttachmentsPreview
         attachments={attachments}
         onRemove={handleRemoveAttachment}
       />
       
-      {/* Input Area */}
-      <div className="flex gap-2 p-4">
-        <Textarea
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            attachments.length > 0
-              ? "Describe what you want to do with these attachments..."
-              : mode === "web_search"
-              ? "Search the web for images, articles, or information..."
-              : mode === "chat"
-              ? "Ask questions or discuss your plans..."
-              : "Describe what you want to build..."
-          }
-          className="min-h-[60px] resize-none text-sm flex-1"
-        />
-        <Button 
-          type="submit" 
-          size="icon" 
-          className="shrink-0 self-end"
-          disabled={!value.trim() || disabled || sessionLoading}
-        >
-          <Send className="h-4 w-4" />
-        </Button>
+      {/* Input Area - unified footer with horizontal layout */}
+      <div className="p-3 bg-muted/30">
+        <div className="flex gap-2 items-end">
+          {/* Grouped action buttons */}
+          <div className="flex gap-1 items-center">
+            {onModeChange && (
+              <ModeToggle
+                mode={mode}
+                onModeChange={onModeChange}
+                disabled={disabled}
+              />
+            )}
+            <ChatScreenshotButton
+              previewUrl={previewUrl || null}
+              onCapture={handleScreenshotCapture}
+              disabled={disabled}
+            />
+            <ChatFileUpload
+              onFilesSelected={handleFilesSelected}
+              disabled={disabled}
+            />
+          </div>
+          
+          <Textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              attachments.length > 0
+                ? "Describe what you want to do with these attachments..."
+                : mode === "web_search"
+                ? "Search the web for images, articles, or information..."
+                : mode === "chat"
+                ? "Ask questions or discuss your plans..."
+                : "Describe what you want to build..."
+            }
+            className="min-h-[60px] resize-none text-sm flex-1"
+          />
+          <Button 
+            type="submit" 
+            size="icon" 
+            className="shrink-0"
+            disabled={!value.trim() || disabled || sessionLoading}
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </form>
   );

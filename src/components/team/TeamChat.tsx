@@ -184,8 +184,8 @@ const TeamChat = ({ projectId, changeRequestId, title }: TeamChatProps) => {
       {/* Typing indicator */}
       <TypingIndicator typingUsers={typingUsers} />
 
-      {/* Input area */}
-      <div className="border-t border-border p-4">
+      {/* Input area - unified footer with bg-muted/30 */}
+      <div className="border-t border-border p-3 bg-muted/30">
         <div className="flex gap-2 items-end">
           <TeamFileUpload onUpload={handleFileUpload} />
           <Textarea
