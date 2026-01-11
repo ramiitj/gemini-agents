@@ -64,6 +64,9 @@ const CreateProjectModal = ({
               value={githubRepo}
               onChange={(e) => setGithubRepo(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              Add a GitHub repo to enable automatic Vercel deployments
+            </p>
           </div>
           <div className="flex justify-end gap-2">
             <Button
