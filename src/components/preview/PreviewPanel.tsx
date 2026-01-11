@@ -41,7 +41,7 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
   
   const { organization } = useOrganization();
   const { canMerge } = useUserRole(organization?.id);
-  const { deployment, status, triggerDeployment } = useDeployment(vercelProjectId);
+  const { deployment, status, triggerDeployment } = useDeployment(vercelProjectId, projectId);
   const { changes, approveChanges } = useCodeChanges(projectId, conversationId);
   const { createChangeRequest } = useChangeRequests(projectId);
   const { session } = useAgentSession(projectId);

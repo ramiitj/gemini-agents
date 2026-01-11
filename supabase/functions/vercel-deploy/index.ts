@@ -12,13 +12,19 @@ serve(async (req) => {
   }
 
   try {
-    const { projectId: vercelProjectId, ref, teamId, projectId } = await req.json();
+    // Support both old format (projectId for Vercel) and new format (vercelProjectId + supabaseProjectId)
+    const body = await req.json();
+    const vercelProjectId = body.vercelProjectId || body.projectId;
+    const supabaseProjectId = body.supabaseProjectId;
+    const ref = body.ref;
+    const teamId = body.teamId;
     
-    // Validate authentication - projectId (Supabase project) is optional for backward compatibility
+    // Validate authentication - supabaseProjectId is optional for backward compatibility
     // but if provided, verify user has editor+ access (deployments require write access)
-    if (projectId) {
-      await validateAuth(req, { projectId, requiredRole: 'editor' });
+    if (supabaseProjectId) {
+      await validateAuth(req, { projectId: supabaseProjectId, requiredRole: 'editor' });
     } else {
+      // Basic auth check without project-level access validation
       await validateAuth(req);
     }
     

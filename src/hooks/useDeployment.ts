@@ -18,7 +18,7 @@ interface UseDeploymentReturn {
   pollStatus: (deploymentId: string) => Promise<void>;
 }
 
-export const useDeployment = (vercelProjectId: string | null): UseDeploymentReturn => {
+export const useDeployment = (vercelProjectId: string | null, supabaseProjectId?: string): UseDeploymentReturn => {
   const [deployment, setDeployment] = useState<Deployment | null>(null);
   const [status, setStatus] = useState<DeploymentStatus>("idle");
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -99,7 +99,12 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
 
     try {
       const { data, error } = await supabase.functions.invoke('vercel-deploy', {
-        body: { projectId: vercelProjectId, ref }
+        body: { 
+          vercelProjectId, 
+          ref,
+          // Pass Supabase project ID for auth validation (optional for backward compatibility)
+          supabaseProjectId 
+        }
       });
 
       if (error) {
@@ -148,7 +153,7 @@ export const useDeployment = (vercelProjectId: string | null): UseDeploymentRetu
         error: e.message || 'Unknown error'
       } : null);
     }
-  }, [vercelProjectId, pollStatus]);
+  }, [vercelProjectId, supabaseProjectId, pollStatus]);
 
   return {
     deployment,
