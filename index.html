@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" prefix="og: https://ogp.me/ns#">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,10 +8,22 @@
     <title>GetHolocron - AI-Powered Product Development Platform</title>
     <meta name="title" content="GetHolocron - AI-Powered Product Development Platform" />
     <meta name="description" content="Evolve your product together. Every team member experiments with their ideas in real-time. See production-ready previews before sharing with your team." />
-    <meta name="keywords" content="AI product development, team collaboration, code previews, no-code, low-code, product management, AI coding, deployment automation" />
+    <meta name="keywords" content="AI product development, team collaboration, code previews, no-code, low-code, product management, AI coding, deployment automation, Vercel, GitHub integration" />
     <meta name="author" content="GetHolocron" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <link rel="canonical" href="https://getholocron.com/" />
+    
+    <!-- Additional SEO Meta -->
+    <meta name="generator" content="Vite + React" />
+    <meta name="rating" content="General" />
+    <meta name="revisit-after" content="7 days" />
+    <meta name="distribution" content="global" />
+    <meta name="language" content="English" />
+    
+    <!-- Theme and Appearance -->
+    <meta name="theme-color" content="#6366f1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="msapplication-TileColor" content="#6366f1" />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
@@ -19,7 +31,11 @@
     <meta property="og:title" content="GetHolocron - AI-Powered Product Development Platform" />
     <meta property="og:description" content="Evolve your product together. Real-time experimentation with AI-powered code changes and instant production previews." />
     <meta property="og:image" content="https://getholocron.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="GetHolocron - AI-Powered Product Development Platform" />
     <meta property="og:site_name" content="GetHolocron" />
+    <meta property="og:locale" content="en_US" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -27,26 +43,100 @@
     <meta name="twitter:title" content="GetHolocron - AI-Powered Product Development Platform" />
     <meta name="twitter:description" content="Evolve your product together. Real-time experimentation with AI-powered code changes." />
     <meta name="twitter:image" content="https://getholocron.com/og-image.png" />
+    <meta name="twitter:image:alt" content="GetHolocron - AI-Powered Product Development Platform" />
     
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="mask-icon" href="/favicon.svg" color="#6366f1" />
+    
+    <!-- Performance Hints -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://getholocron.com" />
     
     <!-- Schema.org structured data -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "GetHolocron",
-      "description": "AI-Powered Product Development Platform for collaborative product development with AI-powered code changes and instant previews.",
-      "url": "https://getholocron.com",
-      "applicationCategory": "DeveloperApplication",
-      "operatingSystem": "Web",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      }
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://getholocron.com/#organization",
+          "name": "GetHolocron",
+          "url": "https://getholocron.com",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://getholocron.com/logo.svg",
+            "width": 512,
+            "height": 512
+          },
+          "description": "AI-Powered Product Development Platform for collaborative product development."
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://getholocron.com/#website",
+          "url": "https://getholocron.com",
+          "name": "GetHolocron",
+          "description": "AI-Powered Product Development Platform",
+          "publisher": {
+            "@id": "https://getholocron.com/#organization"
+          },
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://getholocron.com/dashboard?search={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://getholocron.com/#software",
+          "name": "GetHolocron",
+          "description": "AI-Powered Product Development Platform for collaborative product development with AI-powered code changes and instant previews. Every team member can experiment with ideas in real-time.",
+          "url": "https://getholocron.com",
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "Web",
+          "browserRequirements": "Requires JavaScript. Requires HTML5.",
+          "softwareVersion": "1.0",
+          "author": {
+            "@id": "https://getholocron.com/#organization"
+          },
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock"
+          },
+          "featureList": [
+            "AI-powered code changes",
+            "Real-time production previews",
+            "Team collaboration",
+            "GitHub integration",
+            "Vercel deployment",
+            "Approval workflows"
+          ]
+        },
+        {
+          "@type": "WebPage",
+          "@id": "https://getholocron.com/#webpage",
+          "url": "https://getholocron.com/",
+          "name": "GetHolocron - AI-Powered Product Development Platform",
+          "description": "Evolve your product together. Every team member experiments with their ideas in real-time.",
+          "isPartOf": {
+            "@id": "https://getholocron.com/#website"
+          },
+          "about": {
+            "@id": "https://getholocron.com/#software"
+          },
+          "primaryImageOfPage": {
+            "@type": "ImageObject",
+            "url": "https://getholocron.com/og-image.png"
+          }
+        }
+      ]
     }
     </script>
   </head>

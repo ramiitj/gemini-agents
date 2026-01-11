@@ -1,0 +1,69 @@
+# GetHolocron
+
+> GetHolocron is an AI-powered product development platform where every team member can experiment with ideas in real-time, see production-ready previews, share with their team, and ship to production.
+
+## Overview
+
+GetHolocron enables teams to evolve their products collaboratively. Every team member—from product managers to developers—can experiment with their ideas using AI-powered code changes and see instant, production-ready previews before sharing with the team.
+
+## Key Features
+
+### AI-Powered Development
+- Natural language to code: Describe what you want, AI implements it
+- Web search integration for contextual development
+- Image search for finding visual assets
+- Intelligent code analysis and suggestions
+
+### Real-Time Previews
+- Instant production-ready previews
+- Live deployment to Vercel
+- Branch-specific preview URLs
+- Visual diff comparisons
+
+### Team Collaboration
+- Share previews with natural language summaries
+- Approval workflows for production deployments
+- Team comments and discussions
+- Role-based permissions (owner, admin, editor, viewer)
+
+### Integrations
+- GitHub repository sync
+- Vercel deployment automation
+- Custom domain support
+
+## Core Workflow
+
+1. **Experiment**: Use AI + web search to prototype and iterate on ideas
+2. **Preview**: See live, production-ready previews instantly
+3. **Share**: Share previews with your team using natural language summaries
+4. **Ship**: Deploy to production after team approval
+
+## Target Users
+
+- **Product Managers**: Experiment with feature ideas without waiting for dev resources
+- **Developers**: Rapid prototyping and iteration with AI assistance
+- **Design Teams**: See real implementations of design concepts
+- **Startups**: Move fast from idea to production
+- **Enterprise Teams**: Collaborative product evolution with approval workflows
+
+## Getting Started
+
+- Sign up: https://getholocron.com/auth
+- Dashboard: https://getholocron.com/dashboard
+- Documentation: https://getholocron.com
+
+## Technical Stack
+
+- Frontend: React, TypeScript, Vite, Tailwind CSS
+- Backend: Supabase (PostgreSQL, Edge Functions, Auth)
+- Deployment: Vercel
+- AI: Google Gemini, OpenAI GPT models
+
+## Contact
+
+- Website: https://getholocron.com
+- Support: Available through the platform
+
+## Additional Resources
+
+For more information about GetHolocron's capabilities, visit the main website at https://getholocron.com
