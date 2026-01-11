@@ -113,10 +113,10 @@ const Project = () => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex h-screen w-full overflow-hidden">
         <AppSidebar />
 
-        <main className="flex flex-1 flex-col">
+        <main className="flex flex-1 flex-col h-full overflow-hidden">
           <header className="flex h-14 items-center justify-between border-b border-border px-4">
             <div className="flex items-center">
               <SidebarTrigger />
@@ -134,7 +134,7 @@ const Project = () => {
 
           <ResizablePanelGroup 
             direction="horizontal" 
-            className="flex-1"
+            className="flex-1 min-h-0 overflow-hidden"
             autoSaveId="project-workspace"
           >
             {/* Agent Panel */}

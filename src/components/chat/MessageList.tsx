@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
 import { Loader2, Image, Globe, MessageSquare, Rocket } from "lucide-react";
+import { cn } from "@/lib/utils";
 import MessageBubble from "./MessageBubble";
 import AgentActivityIndicator from "./AgentActivityIndicator";
 import type { Message } from "./ChatContainer";
@@ -21,26 +22,30 @@ const getModeLoadingConfig = (mode?: AgentMode) => {
       return { 
         icon: Image, 
         text: 'Searching for images...',
-        initialText: 'Starting image search...'
+        initialText: 'Starting image search...',
+        useSpinner: false
       };
     case 'web_search':
       return { 
         icon: Globe, 
         text: 'Searching the web...',
-        initialText: 'Starting web search...'
+        initialText: 'Starting web search...',
+        useSpinner: false
       };
     case 'chat':
       return { 
         icon: MessageSquare, 
         text: 'Thinking...',
-        initialText: 'Processing...'
+        initialText: 'Processing...',
+        useSpinner: false
       };
     case 'execution':
     default:
       return { 
         icon: Rocket, 
         text: 'Working on your request...',
-        initialText: 'Starting agent...'
+        initialText: 'Starting agent...',
+        useSpinner: true
       };
   }
 };
@@ -63,7 +68,7 @@ const MessageList = ({
   const LoadingIcon = loadingConfig.icon;
 
   return (
-    <div className="flex-1 overflow-y-auto p-4">
+    <div className="flex-1 min-h-0 overflow-y-auto p-4">
       <div className="space-y-4">
         {messages.map((message) => (
           <MessageBubble 
@@ -81,7 +86,10 @@ const MessageList = ({
               <AgentActivityIndicator activities={activities} />
             ) : (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-border/50">
-                <LoadingIcon className="h-4 w-4 animate-spin text-primary" />
+                <LoadingIcon className={cn(
+                  "h-4 w-4 text-primary",
+                  loadingConfig.useSpinner ? "animate-spin" : "animate-pulse"
+                )} />
                 <span className="text-sm text-muted-foreground">{loadingConfig.initialText}</span>
               </div>
             )}
