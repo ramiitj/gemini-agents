@@ -69,18 +69,22 @@ const ChatInput = ({
         onRemove={handleRemoveAttachment}
       />
       
-      {/* Input Area - unified footer with horizontal layout */}
-      <div className="p-3 bg-muted/30">
+      {/* Input Area - clean stacked layout */}
+      <div className="p-3 bg-muted/30 space-y-3">
+        {/* Mode selection - centered, full width */}
+        {onModeChange && (
+          <div className="flex justify-center">
+            <ModeToggle
+              mode={mode}
+              onModeChange={onModeChange}
+              disabled={disabled}
+            />
+          </div>
+        )}
+        
+        {/* Input row - streamlined */}
         <div className="flex gap-2 items-end">
-          {/* Grouped action buttons */}
-          <div className="flex gap-1 items-center">
-            {onModeChange && (
-              <ModeToggle
-                mode={mode}
-                onModeChange={onModeChange}
-                disabled={disabled}
-              />
-            )}
+          <div className="flex gap-1 items-center shrink-0">
             <ChatScreenshotButton
               previewUrl={previewUrl || null}
               onCapture={handleScreenshotCapture}
@@ -99,18 +103,20 @@ const ChatInput = ({
             placeholder={
               attachments.length > 0
                 ? "Describe what you want to do with these attachments..."
+                : mode === "image_search"
+                ? "Search for images, icons, or visual inspiration..."
                 : mode === "web_search"
-                ? "Search the web for images, articles, or information..."
+                ? "Search the web for documentation, articles, or information..."
                 : mode === "chat"
                 ? "Ask questions or discuss your plans..."
                 : "Describe what you want to build..."
             }
-            className="min-h-[60px] resize-none text-sm flex-1"
+            className="min-h-[52px] resize-none text-sm flex-1"
           />
           <Button 
             type="submit" 
             size="icon" 
-            className="shrink-0"
+            className="shrink-0 h-9 w-9"
             disabled={!value.trim() || disabled || sessionLoading}
           >
             <Send className="h-4 w-4" />
