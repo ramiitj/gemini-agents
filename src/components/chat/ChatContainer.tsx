@@ -149,29 +149,28 @@ const ChatContainer = ({
   }
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Session context indicator */}
-      {session && (session.current_branch || session.github_repo) && (
-        <div className="flex items-center gap-4 border-b border-border px-4 py-2 bg-muted/30">
-          {session.github_repo && (
+    <div className="flex h-full flex-col bg-background">
+      {/* Header - unified h-12 */}
+      <div className="flex h-12 items-center justify-between border-b border-border px-4 bg-muted/30">
+        <span className="text-sm font-medium">Agent</span>
+        <div className="flex items-center gap-3">
+          {session?.github_repo && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <GitBranch className="h-3.5 w-3.5" />
               <span>{session.github_owner}/{session.github_repo}</span>
             </div>
           )}
-          {session.current_branch && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="text-foreground font-medium">{session.current_branch}</span>
-            </div>
+          {session?.current_branch && (
+            <span className="text-xs font-medium text-foreground">{session.current_branch}</span>
           )}
-          {session.staged_files && Object.keys(session.staged_files).length > 0 && (
+          {session?.staged_files && Object.keys(session.staged_files).length > 0 && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <FileCode className="h-3.5 w-3.5" />
               <span>{Object.keys(session.staged_files).length} staged</span>
             </div>
           )}
         </div>
-      )}
+      </div>
       
       <MessageList 
         messages={messages} 
