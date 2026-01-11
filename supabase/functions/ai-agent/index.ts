@@ -2725,6 +2725,19 @@ User Request: ${message}`;
     if (mode === 'web_search') {
       console.log('Web Search mode - using Google Search grounding');
       
+      // Emit web search activity
+      if (supabaseUrl && supabaseKey && projectId) {
+        await emitActivity(
+          supabaseUrl, 
+          supabaseKey, 
+          projectId,
+          conversationId, 
+          'web_search', 
+          'in_progress', 
+          { message: 'Searching the web...' }
+        );
+      }
+      
       // IMPORTANT: Only send the current user query - NOT the full history
       // The full history contains execution mode prompts that confuse the model
       const searchMessages = [
@@ -2839,6 +2852,19 @@ You help users find information on the web by searching Google and providing com
           }
         }));
       
+      // Emit completion activity
+      if (supabaseUrl && supabaseKey && projectId) {
+        await emitActivity(
+          supabaseUrl, 
+          supabaseKey, 
+          projectId,
+          conversationId, 
+          'web_search', 
+          'complete', 
+          { message: `Found ${cleanedChunks.length} sources` }
+        );
+      }
+      
       return new Response(
         JSON.stringify({ 
           response: responseText,
@@ -2857,6 +2883,19 @@ You help users find information on the web by searching Google and providing com
     // Image Search Mode - Use Google Custom Search API with OAuth2 Bearer token
     if (mode === 'image_search') {
       console.log('Image Search mode - using Google Custom Search API with OAuth2');
+      
+      // Emit image search activity
+      if (supabaseUrl && supabaseKey && projectId) {
+        await emitActivity(
+          supabaseUrl, 
+          supabaseKey, 
+          projectId,
+          conversationId, 
+          'image_search', 
+          'in_progress', 
+          { message: 'Searching for images...' }
+        );
+      }
       
       const cseServiceAccountJson = Deno.env.get('GOOGLE_CSE_SERVICE_ACCOUNT_JSON');
       const searchEngineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID');
@@ -2959,6 +2998,19 @@ You help users find information on the web by searching Google and providing com
         // Save session
         if (supabaseUrl && supabaseKey && projectId && userId) {
           await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, toolContext, mode);
+        }
+
+        // Emit completion activity
+        if (supabaseUrl && supabaseKey && projectId) {
+          await emitActivity(
+            supabaseUrl, 
+            supabaseKey, 
+            projectId,
+            conversationId, 
+            'image_search', 
+            'complete', 
+            { message: `Found ${imageResults.length} images` }
+          );
         }
 
         return new Response(
