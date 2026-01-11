@@ -269,108 +269,83 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
 
   return (
     <div className="flex h-full flex-col">
-      {/* Tabs */}
-      {/* Header - unified h-12 */}
+      {/* Header - unified h-12 with tabs and contextual actions */}
       <div className="flex h-12 items-center justify-between border-b border-border px-4 bg-muted/30">
-        <div className="flex items-center">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`relative px-4 h-12 text-sm transition-colors ${
-                activeTab === tab.id
-                  ? "border-b-2 border-foreground font-medium text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-              {tab.badge && tab.badge > 0 && (
-                <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="flex items-center gap-4">
+          {/* Tabs */}
+          <div className="flex items-center">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative px-3 h-12 text-sm transition-colors ${
+                  activeTab === tab.id
+                    ? "border-b-2 border-foreground font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+                {tab.badge && tab.badge > 0 && (
+                  <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          
+          {/* Branch status - compact, in header */}
+          {activeTab === "preview" && session?.current_branch && (
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground">
+              <GitBranch className="h-3 w-3" />
+              <span className="max-w-[120px] truncate">{session.current_branch}</span>
+            </div>
+          )}
         </div>
-        <DeploymentStatus status={status} />
+        
+        <div className="flex items-center gap-2">
+          {/* Preview-specific actions - only show when on preview tab */}
+          {activeTab === "preview" && rawUrl && (
+            <>
+              <Button
+                variant={visualEditMode ? "default" : "ghost"}
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={toggleVisualEditMode}
+              >
+                <MousePointer className="h-3 w-3" />
+                <span className="hidden sm:inline">{visualEditMode ? "Exit" : "Edit"}</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => triggerDeployment()}
+                disabled={status === "building"}
+              >
+                <RefreshCw className={`h-3 w-3 ${status === "building" ? "animate-spin" : ""}`} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                asChild
+              >
+                <a href={rawUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </Button>
+            </>
+          )}
+          <DeploymentStatus status={status} />
+        </div>
       </div>
 
       {/* Content */}
-      <div className="relative flex-1 overflow-auto">
+      <div className="relative flex-1 overflow-auto bg-background">
         {activeTab === "preview" && (
           <div className="flex h-full flex-col animate-fade-in">
-            {/* Preview header */}
-            <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-2">
-              <div className="flex items-center gap-3">
-                {/* Branch status - shows user's current branch if available */}
-                {session?.current_branch ? (
-                  <BranchStatus
-                    branch={session.current_branch}
-                    deployment={branchDeployment}
-                    loading={branchLoading}
-                    githubOwner={session.github_owner}
-                    githubRepo={session.github_repo}
-                  />
-                ) : (
-                  <span className="text-xs text-muted-foreground">
-                    {rawUrl ? rawUrl.replace("https://", "") : "No deployment yet"}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Visual Edit Toggle */}
-                {rawUrl && (
-                  <Button
-                    variant={visualEditMode ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 gap-1.5 text-xs"
-                    onClick={toggleVisualEditMode}
-                  >
-                    <MousePointer className="h-3 w-3" />
-                    {visualEditMode ? "Exit Edit" : "Visual Edit"}
-                  </Button>
-                )}
-                {/* Screenshot button */}
-                {rawUrl && onScreenshotCapture && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 gap-1.5 text-xs"
-                    onClick={() => onScreenshotCapture(rawUrl)}
-                  >
-                    <Camera className="h-3 w-3" />
-                    Screenshot
-                  </Button>
-                )}
-                {/* Redeploy button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 gap-1.5 text-xs"
-                  onClick={() => triggerDeployment()}
-                  disabled={status === "building"}
-                >
-                  <RefreshCw className={`h-3 w-3 ${status === "building" ? "animate-spin" : ""}`} />
-                  {status === "building" ? "Building..." : "Redeploy"}
-                </Button>
-                {/* Open in new tab - single consolidated button */}
-                {rawUrl && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1.5 text-xs"
-                    asChild
-                  >
-                    <a href={rawUrl} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-3 w-3" />
-                      Open
-                    </a>
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Preview iframe or states */}
+            {/* Preview iframe or states - no sub-header */}
             {status === "failed" ? (
               <ErrorDisplay
                 error={deployment?.error}
@@ -419,8 +394,8 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
         )}
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2 border-t border-border p-4">
+      {/* Footer - unified p-3 bg-muted/30 */}
+      <div className="flex items-center gap-2 border-t border-border p-3 bg-muted/30">
         <Button variant="outline" size="sm" className="gap-1.5">
           <RotateCcw className="h-3.5 w-3.5" />
           Undo
@@ -438,7 +413,7 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
             ? "Deploying..."
             : pendingChangesCount > 0 
               ? `Share ${pendingChangesCount} changes` 
-              : "Share with Team"
+              : "Share"
           }
         </Button>
       </div>
