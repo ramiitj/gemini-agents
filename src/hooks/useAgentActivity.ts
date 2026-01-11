@@ -5,7 +5,17 @@ export interface AgentActivity {
   id: string;
   project_id: string;
   conversation_id: string | null;
-  activity_type: 'analyzing' | 'writing' | 'pushing' | 'deploying' | 'checking_logs' | 'fixing' | 'screenshot' | 'complete';
+  activity_type: 
+    | 'analyzing' 
+    | 'writing' 
+    | 'pushing' 
+    | 'deploying' 
+    | 'checking_logs' 
+    | 'fixing' 
+    | 'screenshot' 
+    | 'complete'
+    | 'web_search'
+    | 'image_search';
   status: 'in_progress' | 'complete' | 'error';
   details?: {
     file?: string;
