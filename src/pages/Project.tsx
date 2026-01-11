@@ -189,22 +189,6 @@ const Project = () => {
               </div>
             </ResizablePanel>
 
-            {/* Preview Panel */}
-            <ResizablePanel 
-              defaultSize={45} 
-              minSize={25}
-              className="flex flex-col"
-            >
-              <PreviewPanel 
-                projectId={project.id}
-                vercelProjectId={project.vercel_project_id}
-                githubRepo={project.github_repo}
-                onSendToAI={handleSendToAI}
-                onVercelSetup={handleVercelSetup}
-                onPreviewUrlChange={handlePreviewUrlChange}
-              />
-            </ResizablePanel>
-
             <ResizableHandle withHandle className="hover:bg-primary/10 transition-colors" />
 
             {/* Team Panel */}

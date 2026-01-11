@@ -6,7 +6,8 @@ import { useAgentSession } from "@/hooks/useAgentSession";
 import { useAgentActivity } from "@/hooks/useAgentActivity";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { GitBranch, FileCode, Pin, X } from "lucide-react";
+import { GitBranch, FileCode, Layers, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
 import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata, ImageSearchResult, DesignOutput } from "@/types/search";
 
@@ -29,6 +30,12 @@ export interface Message {
 export interface VisualContext {
   element: ElementInfo;
   request: string;
+}
+
+interface DesignContext {
+  imageUrl: string;
+  prompt: string;
+  code?: string;
 }
 
 interface ChatContainerProps {
@@ -54,6 +61,10 @@ const ChatContainer = ({
   
   // Track the mode being used for the current pending request
   const [pendingMode, setPendingMode] = useState<AgentMode | null>(null);
+  
+  // Context panel state
+  const [contextOpen, setContextOpen] = useState(true);
+  const [designContext, setDesignContext] = useState<DesignContext | null>(null);
   
   // Persist pinned results in sessionStorage
   const [pinnedResults, setPinnedResults] = useState<SearchAttachment[]>(() => {
@@ -101,7 +112,32 @@ const ChatContainer = ({
     setPinnedResults(prev => prev.filter((_, i) => i !== index));
   };
 
+  const clearDesignContext = () => {
+    setDesignContext(null);
+  };
+
+  // Handle using design as context
+  const handleUseDesignAsContext = (design: DesignOutput, type: 'image' | 'code') => {
+    if (type === 'image') {
+      setDesignContext({
+        imageUrl: design.imageUrl,
+        prompt: design.prompt,
+        code: design.code
+      });
+    } else {
+      // Switch to execute mode with code in context
+      handleModeChange('execution');
+      setDesignContext({
+        imageUrl: design.imageUrl,
+        prompt: design.prompt,
+        code: design.code
+      });
+    }
+  };
+
   const pinnedUrls = pinnedResults.map(r => r.url).filter(Boolean) as string[];
+  const hasContext = pinnedResults.length > 0 || designContext !== null;
+  const contextCount = pinnedResults.length + (designContext ? 1 : 0);
 
   const handleSend = (content: string, attachments?: FileAttachment[], context?: VisualContext, overrideMode?: AgentMode) => {
     if (sessionLoading) return;
@@ -116,9 +152,15 @@ const ChatContainer = ({
     // Combine searchContext with pinned results
     const combinedSearchContext = [...(searchContext || []), ...pinnedResults];
     
+    // If design context code exists and in execute mode, append it
+    let messageContent = content;
+    if (designContext?.code && modeToUse === 'execution') {
+      messageContent = `${content}\n\nUse this design code as reference:\n\`\`\`tsx\n${designContext.code}\n\`\`\``;
+    }
+    
     // Pass raw attachments and search context to sendMessage - backend handles formatting
     sendMessage(
-      content, 
+      messageContent, 
       githubRepo || undefined, 
       context?.element, 
       modeToUse,
@@ -180,28 +222,61 @@ const ChatContainer = ({
         onPinResult={handlePinResult}
         pinnedUrls={pinnedUrls}
         currentMode={displayMode}
+        onUseDesignContext={handleUseDesignAsContext}
       />
 
-      {/* Pinned results bar */}
-      {pinnedResults.length > 0 && (
-        <div className="border-t border-border px-4 py-2 bg-accent/30">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-            <Pin className="h-3 w-3" />
-            Pinned sources ({pinnedResults.length})
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {pinnedResults.map((r, i) => (
-              <Badge key={i} variant="secondary" className="flex items-center gap-1 pr-1">
-                <span className="max-w-32 truncate">{r.title}</span>
-                <button 
-                  onClick={() => unpinResult(i)}
-                  className="ml-1 rounded-full hover:bg-muted p-0.5"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
+      {/* Context Window - collapsible, more prominent */}
+      {hasContext && (
+        <div className="border-t border-border bg-accent/30">
+          <Collapsible open={contextOpen} onOpenChange={setContextOpen}>
+            <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-2 text-sm font-medium hover:bg-accent/50 transition-colors">
+              <div className="flex items-center gap-2">
+                <Layers className="h-4 w-4 text-primary" />
+                <span>Context ({contextCount})</span>
+              </div>
+              {contextOpen ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </CollapsibleTrigger>
+            <CollapsibleContent className="px-4 pb-3">
+              <div className="grid grid-cols-2 gap-2">
+                {/* Design context with preview */}
+                {designContext && (
+                  <div className="relative rounded-md border border-border p-2 bg-background">
+                    <img 
+                      src={designContext.imageUrl} 
+                      alt="Design context"
+                      className="h-16 w-full object-cover rounded" 
+                    />
+                    <span className="text-xs text-muted-foreground mt-1 block truncate">
+                      Design: {designContext.prompt}
+                    </span>
+                    <button 
+                      onClick={clearDesignContext}
+                      className="absolute top-1 right-1 p-0.5 rounded-full bg-background/80 hover:bg-muted"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+                
+                {/* Pinned search results */}
+                {pinnedResults.map((r, i) => (
+                  <div key={i} className="relative flex items-center gap-2 rounded-md border border-border p-2 bg-background">
+                    <span className="text-xs truncate flex-1">{r.title}</span>
+                    <button 
+                      onClick={() => unpinResult(i)}
+                      className="p-0.5 rounded-full hover:bg-muted"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       )}
 

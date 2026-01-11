@@ -11,6 +11,7 @@ interface ModeToggleProps {
 const ModeToggle = ({ mode, onModeChange, disabled }: ModeToggleProps) => {
   return (
     <div className="flex rounded-lg border border-border bg-muted/50 p-0.5" data-tour="mode-toggle">
+      {/* Chat - Plan and discuss */}
       <button
         onClick={() => onModeChange("chat")}
         disabled={disabled}
@@ -24,6 +25,23 @@ const ModeToggle = ({ mode, onModeChange, disabled }: ModeToggleProps) => {
         <MessageSquare className="h-3.5 w-3.5" />
         Chat
       </button>
+      
+      {/* Design - Generate UI prototypes (before execute in workflow) */}
+      <button
+        onClick={() => onModeChange("design")}
+        disabled={disabled}
+        className={cn(
+          "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all",
+          mode === "design"
+            ? "bg-pink-500 text-white shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        <Palette className="h-3.5 w-3.5" />
+        Design
+      </button>
+      
+      {/* Execute - Implement code changes */}
       <button
         onClick={() => onModeChange("execution")}
         disabled={disabled}
@@ -37,6 +55,8 @@ const ModeToggle = ({ mode, onModeChange, disabled }: ModeToggleProps) => {
         <Zap className="h-3.5 w-3.5" />
         Execute
       </button>
+      
+      {/* Web Search - Find documentation */}
       <button
         onClick={() => onModeChange("web_search")}
         disabled={disabled}
@@ -50,6 +70,8 @@ const ModeToggle = ({ mode, onModeChange, disabled }: ModeToggleProps) => {
         <Globe className="h-3.5 w-3.5" />
         Web
       </button>
+      
+      {/* Image Search - Visual inspiration */}
       <button
         onClick={() => onModeChange("image_search")}
         disabled={disabled}
@@ -62,19 +84,6 @@ const ModeToggle = ({ mode, onModeChange, disabled }: ModeToggleProps) => {
       >
         <Image className="h-3.5 w-3.5" />
         Images
-      </button>
-      <button
-        onClick={() => onModeChange("design")}
-        disabled={disabled}
-        className={cn(
-          "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all",
-          mode === "design"
-            ? "bg-pink-500 text-white shadow-sm"
-            : "text-muted-foreground hover:text-foreground"
-        )}
-      >
-        <Palette className="h-3.5 w-3.5" />
-        Design
       </button>
     </div>
   );

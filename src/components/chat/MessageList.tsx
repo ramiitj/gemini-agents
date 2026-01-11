@@ -1,11 +1,11 @@
 import { useRef, useEffect } from "react";
-import { Loader2, Image, Globe, MessageSquare, Rocket } from "lucide-react";
+import { Loader2, Image, Globe, MessageSquare, Rocket, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MessageBubble from "./MessageBubble";
 import AgentActivityIndicator from "./AgentActivityIndicator";
 import type { Message } from "./ChatContainer";
 import type { AgentActivity } from "@/hooks/useAgentActivity";
-import type { SearchAttachment, AgentMode } from "@/types/search";
+import type { SearchAttachment, AgentMode, DesignOutput } from "@/types/search";
 
 interface MessageListProps {
   messages: Message[];
@@ -14,6 +14,7 @@ interface MessageListProps {
   onPinResult?: (result: SearchAttachment) => void;
   pinnedUrls?: string[];
   currentMode?: AgentMode;
+  onUseDesignContext?: (design: DesignOutput, type: 'image' | 'code') => void;
 }
 
 const getModeLoadingConfig = (mode?: AgentMode) => {
@@ -30,6 +31,13 @@ const getModeLoadingConfig = (mode?: AgentMode) => {
         icon: Globe, 
         text: 'Searching the web...',
         initialText: 'Starting web search...',
+        useSpinner: false
+      };
+    case 'design':
+      return { 
+        icon: Palette, 
+        text: 'Generating design...',
+        initialText: 'Starting design generation...',
         useSpinner: false
       };
     case 'chat':
@@ -56,7 +64,8 @@ const MessageList = ({
   activities = [],
   onPinResult,
   pinnedUrls = [],
-  currentMode
+  currentMode,
+  onUseDesignContext
 }: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -125,6 +134,7 @@ const MessageList = ({
             message={message}
             onPinResult={onPinResult}
             pinnedUrls={pinnedUrls}
+            onUseDesignContext={onUseDesignContext}
           />
         ))}
         
