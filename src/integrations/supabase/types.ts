@@ -601,6 +601,63 @@ export type Database = {
           },
         ]
       }
+      design_gallery: {
+        Row: {
+          code: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          image_url: string | null
+          medium: string | null
+          name: string
+          organization_id: string
+          project_id: string | null
+          tags: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          image_url?: string | null
+          medium?: string | null
+          name: string
+          organization_id: string
+          project_id?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          image_url?: string | null
+          medium?: string | null
+          name?: string
+          organization_id?: string
+          project_id?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_gallery_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_gallery_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       github_connections: {
         Row: {
           connected_at: string | null

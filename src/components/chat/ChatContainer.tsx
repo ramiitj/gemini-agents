@@ -4,10 +4,12 @@ import ChatInput from "./ChatInput";
 import { useConversation } from "@/hooks/useConversation";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useAgentActivity } from "@/hooks/useAgentActivity";
+import { useDesignGallery } from "@/hooks/useDesignGallery";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { GitBranch, FileCode, Layers, X, ChevronDown, ChevronUp } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { toast } from "sonner";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
 import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata, ImageSearchResult, DesignOutput } from "@/types/search";
 
@@ -45,6 +47,7 @@ interface ChatContainerProps {
   visualContext?: VisualContext | null;
   onVisualContextHandled?: () => void;
   searchContext?: SearchAttachment[];
+  organizationId?: string;
 }
 
 const ChatContainer = ({ 
@@ -53,11 +56,13 @@ const ChatContainer = ({
   previewUrl,
   visualContext, 
   onVisualContextHandled,
-  searchContext
+  searchContext,
+  organizationId
 }: ChatContainerProps) => {
   const { messages, isLoading, isSending, sendMessage, conversation } = useConversation(projectId);
   const { session, loading: sessionLoading, updateMode } = useAgentSession(projectId);
   const { activities, clearActivities } = useAgentActivity(projectId, conversation?.id);
+  const { saveDesign } = useDesignGallery(organizationId);
   
   // Track the mode being used for the current pending request
   const [pendingMode, setPendingMode] = useState<AgentMode | null>(null);
@@ -133,6 +138,39 @@ const ChatContainer = ({
         code: design.code
       });
     }
+  };
+
+  // Handle Stitch import
+  const handleStitchImport = async (design: DesignOutput, saveToGallery?: boolean, name?: string) => {
+    // Add to design context
+    setDesignContext({
+      imageUrl: design.imageUrl,
+      prompt: name || design.prompt || 'Imported from Stitch',
+      code: design.code
+    });
+
+    // Save to gallery if requested
+    if (saveToGallery && name && organizationId) {
+      await saveDesign({
+        name,
+        code: design.code,
+        imageUrl: design.imageUrl || undefined,
+        medium: design.medium || 'web',
+        projectId
+      });
+    }
+
+    toast.success('Design imported successfully');
+  };
+
+  // Handle gallery selection
+  const handleGallerySelect = (design: DesignOutput) => {
+    setDesignContext({
+      imageUrl: design.imageUrl,
+      prompt: design.prompt,
+      code: design.code
+    });
+    toast.success('Design loaded from gallery');
   };
 
   const pinnedUrls = pinnedResults.map(r => r.url).filter(Boolean) as string[];
@@ -245,11 +283,17 @@ const ChatContainer = ({
                 {/* Design context with preview */}
                 {designContext && (
                   <div className="relative rounded-md border border-border p-2 bg-background">
-                    <img 
-                      src={designContext.imageUrl} 
-                      alt="Design context"
-                      className="h-16 w-full object-cover rounded" 
-                    />
+                    {designContext.imageUrl ? (
+                      <img 
+                        src={designContext.imageUrl} 
+                        alt="Design context"
+                        className="h-16 w-full object-cover rounded" 
+                      />
+                    ) : (
+                      <div className="h-16 w-full rounded bg-muted flex items-center justify-center">
+                        <span className="text-xs text-muted-foreground">Code imported</span>
+                      </div>
+                    )}
                     <span className="text-xs text-muted-foreground mt-1 block truncate">
                       Design: {designContext.prompt}
                     </span>
@@ -287,6 +331,9 @@ const ChatContainer = ({
         sessionLoading={sessionLoading}
         mode={mode}
         onModeChange={handleModeChange}
+        onStitchImport={handleStitchImport}
+        onGallerySelect={handleGallerySelect}
+        organizationId={organizationId}
       />
     </div>
   );

@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { Send } from "lucide-react";
+import { Send, ExternalLink, Download, Grid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import ModeToggle from "./ModeToggle";
 import ChatScreenshotButton from "./ChatScreenshotButton";
 import ChatFileUpload from "./ChatFileUpload";
 import AttachmentsPreview from "./AttachmentsPreview";
-import type { FileAttachment, AgentMode } from "@/types/search";
+import StitchImportModal from "./StitchImportModal";
+import DesignGalleryModal from "./DesignGalleryModal";
+import type { FileAttachment, AgentMode, DesignOutput } from "@/types/search";
 
 interface ChatInputProps {
   onSend: (content: string, attachments?: FileAttachment[]) => void;
@@ -15,6 +17,9 @@ interface ChatInputProps {
   sessionLoading?: boolean;
   mode?: AgentMode;
   onModeChange?: (mode: AgentMode) => void;
+  onStitchImport?: (design: DesignOutput, saveToGallery?: boolean, name?: string) => void;
+  onGallerySelect?: (design: DesignOutput) => void;
+  organizationId?: string;
 }
 
 const ChatInput = ({ 
@@ -23,10 +28,15 @@ const ChatInput = ({
   disabled, 
   sessionLoading, 
   mode = "execution", 
-  onModeChange
+  onModeChange,
+  onStitchImport,
+  onGallerySelect,
+  organizationId
 }: ChatInputProps) => {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [galleryModalOpen, setGalleryModalOpen] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +56,6 @@ const ChatInput = ({
   };
 
   const handleFilesSelected = (files: FileAttachment[]) => {
-    // Directly add files - they already have correct type structure
     setAttachments(prev => [...prev, ...files]);
   };
 
@@ -59,6 +68,14 @@ const ChatInput = ({
       e.preventDefault();
       handleSubmit(e);
     }
+  };
+
+  const handleStitchImport = (design: DesignOutput, saveToGallery?: boolean, name?: string) => {
+    onStitchImport?.(design, saveToGallery, name);
+  };
+
+  const handleGallerySelect = (design: DesignOutput) => {
+    onGallerySelect?.(design);
   };
 
   return (
@@ -79,6 +96,42 @@ const ChatInput = ({
               onModeChange={onModeChange}
               disabled={disabled}
             />
+          </div>
+        )}
+
+        {/* Stitch action buttons - shown in design mode */}
+        {mode === 'design' && (
+          <div className="flex items-center justify-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs h-8"
+              onClick={() => window.open('https://stitch.withgoogle.com/', '_blank')}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open in Stitch
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs h-8"
+              onClick={() => setImportModalOpen(true)}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Import from Stitch
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs h-8"
+              onClick={() => setGalleryModalOpen(true)}
+            >
+              <Grid className="h-3.5 w-3.5" />
+              Gallery
+            </Button>
           </div>
         )}
         
@@ -125,6 +178,21 @@ const ChatInput = ({
           </Button>
         </div>
       </div>
+
+      {/* Stitch Import Modal */}
+      <StitchImportModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        onImport={handleStitchImport}
+      />
+
+      {/* Design Gallery Modal */}
+      <DesignGalleryModal
+        open={galleryModalOpen}
+        onOpenChange={setGalleryModalOpen}
+        onSelect={handleGallerySelect}
+        organizationId={organizationId}
+      />
     </form>
   );
 };

@@ -51,4 +51,22 @@ export interface DesignOutput {
   prompt: string;
   medium?: 'web' | 'app';
   variants?: DesignOutput[];
+  // Gallery and import fields
+  id?: string;
+  imported?: boolean;
+  savedAt?: string;
+}
+
+export interface SavedDesign {
+  id: string;
+  name: string;
+  code: string;
+  image_url: string | null;
+  medium: 'web' | 'app';
+  tags: string[];
+  project_id: string | null;
+  organization_id: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
