@@ -206,65 +206,90 @@ export function useConversation(projectId: string | undefined) {
         m.id === userMessage.id ? { ...m, id: savedUserMsg.id } : m
       ));
 
-      // Call AI agent with mode, visual context, attachments, and search context
-      const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-agent', {
-        body: {
-          message: content,
-          conversationId: conversation.id,
-          projectId,
-          githubRepo,
-          visualContext,
-          mode,
-          userId: user?.id,
-          attachments: attachments?.map(a => ({
-            type: a.type,
-            name: a.name,
-            url: a.url,
-            preview: a.preview,
-            content: a.content
-          })),
-          searchContext: searchContext?.map(s => ({
-            type: s.type,
-            title: s.title,
-            url: s.url,
-            snippet: s.snippet,
-            filePath: s.filePath
-          })),
-          history: messages.filter(m => m.role !== 'system').map(m => ({
-            role: m.role,
-            content: m.content
-          }))
-        }
-      });
+      let responseData: any;
 
-      if (aiError) throw aiError;
+      // Design mode: call stitch-generate directly (bypass ai-agent)
+      if (mode === 'design') {
+        const { data: designResult, error: designError } = await supabase.functions.invoke('stitch-generate', {
+          body: {
+            prompt: content,
+            imageUrl: attachments?.find(a => a.type === 'screenshot')?.preview,
+            medium: 'web'
+          }
+        });
 
-      // Save AI response to database first to get real ID
+        if (designError) throw designError;
+
+        responseData = {
+          response: designResult?.success 
+            ? `Generated UI design for: "${content}"` 
+            : `Failed to generate design: ${designResult?.error || 'Unknown error'}`,
+          success: designResult?.success,
+          mode: 'design',
+          designOutput: designResult?.designOutput
+        };
+      } else {
+        // All other modes: call AI agent
+        const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-agent', {
+          body: {
+            message: content,
+            conversationId: conversation.id,
+            projectId,
+            githubRepo,
+            visualContext,
+            mode,
+            userId: user?.id,
+            attachments: attachments?.map(a => ({
+              type: a.type,
+              name: a.name,
+              url: a.url,
+              preview: a.preview,
+              content: a.content
+            })),
+            searchContext: searchContext?.map(s => ({
+              type: s.type,
+              title: s.title,
+              url: s.url,
+              snippet: s.snippet,
+              filePath: s.filePath
+            })),
+            history: messages.filter(m => m.role !== 'system').map(m => ({
+              role: m.role,
+              content: m.content
+            }))
+          }
+        });
+
+        if (aiError) throw aiError;
+        responseData = aiResponse;
+      }
+
+      // Save response to database
       const { data: savedAiMsg, error: aiMsgError } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversation.id,
           role: 'assistant',
-          content: aiResponse.response || 'I apologize, but I encountered an issue processing your request.',
-          status: aiResponse.success ? 'complete' : 'error'
+          content: responseData.response || 'I apologize, but I encountered an issue processing your request.',
+          status: responseData.success ? 'complete' : 'error'
         })
         .select()
         .single();
 
       if (aiMsgError) throw aiMsgError;
 
-      // Add AI response with the real database ID (realtime will skip due to duplicate check)
+      // Add response with the real database ID
       const responseMessage: Message = {
         id: savedAiMsg.id,
         role: 'assistant',
-        content: aiResponse.response || 'I apologize, but I encountered an issue processing your request.',
+        content: responseData.response || 'I apologize, but I encountered an issue processing your request.',
         timestamp: new Date(savedAiMsg.created_at),
-        status: aiResponse.success ? 'complete' : 'error',
-        mode: aiResponse.mode,
-        groundingMetadata: aiResponse.groundingMetadata,
-        imageResults: aiResponse.imageResults,
-        designOutput: aiResponse.designOutput,
-        codeChanges: aiResponse.codeChanges
+        status: responseData.success ? 'complete' : 'error',
+        mode: responseData.mode,
+        groundingMetadata: responseData.groundingMetadata,
+        imageResults: responseData.imageResults,
+        designOutput: responseData.designOutput,
+        codeChanges: responseData.codeChanges
       };
 
       setMessages(prev => [...prev, responseMessage]);

@@ -103,7 +103,7 @@ const DesignResultsPanel = ({ designs, onUseAsContext }: DesignResultsPanelProps
               onClick={() => onUseAsContext(currentDesign, 'image')}
             >
               <Image className="h-3.5 w-3.5" />
-              Use Image
+              Add to Context
             </Button>
             <Button
               size="sm"
@@ -111,7 +111,7 @@ const DesignResultsPanel = ({ designs, onUseAsContext }: DesignResultsPanelProps
               onClick={() => onUseAsContext(currentDesign, 'code')}
             >
               <Code className="h-3.5 w-3.5" />
-              Use Code
+              Use in Execute
             </Button>
           </div>
         </div>
