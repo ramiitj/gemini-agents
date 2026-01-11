@@ -1,14 +1,12 @@
 import { useState } from "react";
-import { Send, ExternalLink, Download, Grid } from "lucide-react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import ModeToggle from "./ModeToggle";
 import ChatScreenshotButton from "./ChatScreenshotButton";
 import ChatFileUpload from "./ChatFileUpload";
 import AttachmentsPreview from "./AttachmentsPreview";
-import StitchImportModal from "./StitchImportModal";
-import DesignGalleryModal from "./DesignGalleryModal";
-import type { FileAttachment, AgentMode, DesignOutput } from "@/types/search";
+import type { FileAttachment, AgentMode } from "@/types/search";
 
 interface ChatInputProps {
   onSend: (content: string, attachments?: FileAttachment[]) => void;
@@ -17,9 +15,6 @@ interface ChatInputProps {
   sessionLoading?: boolean;
   mode?: AgentMode;
   onModeChange?: (mode: AgentMode) => void;
-  onStitchImport?: (design: DesignOutput, saveToGallery?: boolean, name?: string) => void;
-  onGallerySelect?: (design: DesignOutput) => void;
-  organizationId?: string;
 }
 
 const ChatInput = ({ 
@@ -28,15 +23,10 @@ const ChatInput = ({
   disabled, 
   sessionLoading, 
   mode = "execution", 
-  onModeChange,
-  onStitchImport,
-  onGallerySelect,
-  organizationId
+  onModeChange
 }: ChatInputProps) => {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  const [galleryModalOpen, setGalleryModalOpen] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,14 +60,6 @@ const ChatInput = ({
     }
   };
 
-  const handleStitchImport = (design: DesignOutput, saveToGallery?: boolean, name?: string) => {
-    onStitchImport?.(design, saveToGallery, name);
-  };
-
-  const handleGallerySelect = (design: DesignOutput) => {
-    onGallerySelect?.(design);
-  };
-
   return (
     <form onSubmit={handleSubmit} className="border-t border-border">
       {/* Attachments Preview */}
@@ -99,40 +81,11 @@ const ChatInput = ({
           </div>
         )}
 
-        {/* Stitch action buttons - shown in design mode */}
+        {/* Design mode hint */}
         {mode === 'design' && (
-          <div className="flex items-center justify-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs h-8"
-              onClick={() => window.open('https://stitch.withgoogle.com/', '_blank')}
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open in Stitch
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs h-8"
-              onClick={() => setImportModalOpen(true)}
-            >
-              <Download className="h-3.5 w-3.5" />
-              Import from Stitch
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs h-8"
-              onClick={() => setGalleryModalOpen(true)}
-            >
-              <Grid className="h-3.5 w-3.5" />
-              Gallery
-            </Button>
-          </div>
+          <p className="text-xs text-muted-foreground text-center">
+            Use the Design Studio above to import designs
+          </p>
         )}
         
         {/* Input row - streamlined */}
@@ -157,7 +110,7 @@ const ChatInput = ({
               attachments.length > 0
                 ? "Describe what you want to do with these attachments..."
                 : mode === "design"
-                ? "Describe the UI you want to design (e.g., 'a mobile app dashboard for fitness tracking')..."
+                ? "Describe the UI you want to design..."
                 : mode === "image_search"
                 ? "Search for images, icons, or visual inspiration..."
                 : mode === "web_search"
@@ -178,21 +131,6 @@ const ChatInput = ({
           </Button>
         </div>
       </div>
-
-      {/* Stitch Import Modal */}
-      <StitchImportModal
-        open={importModalOpen}
-        onOpenChange={setImportModalOpen}
-        onImport={handleStitchImport}
-      />
-
-      {/* Design Gallery Modal */}
-      <DesignGalleryModal
-        open={galleryModalOpen}
-        onOpenChange={setGalleryModalOpen}
-        onSelect={handleGallerySelect}
-        organizationId={organizationId}
-      />
     </form>
   );
 };

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import MessageList from "./MessageList";
 import ChatInput from "./ChatInput";
+import StitchImportModal from "./StitchImportModal";
+import DesignGalleryModal from "./DesignGalleryModal";
 import { useConversation } from "@/hooks/useConversation";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useAgentActivity } from "@/hooks/useAgentActivity";
@@ -70,6 +72,10 @@ const ChatContainer = ({
   // Context panel state
   const [contextOpen, setContextOpen] = useState(true);
   const [designContext, setDesignContext] = useState<DesignContext | null>(null);
+  
+  // Modal states for design mode
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [galleryModalOpen, setGalleryModalOpen] = useState(false);
   
   // Persist pinned results in sessionStorage
   const [pinnedResults, setPinnedResults] = useState<SearchAttachment[]>(() => {
@@ -261,6 +267,10 @@ const ChatContainer = ({
         pinnedUrls={pinnedUrls}
         currentMode={displayMode}
         onUseDesignContext={handleUseDesignAsContext}
+        designContext={designContext}
+        onOpenImportModal={() => setImportModalOpen(true)}
+        onOpenGalleryModal={() => setGalleryModalOpen(true)}
+        onClearDesignContext={clearDesignContext}
       />
 
       {/* Context Window - collapsible, more prominent */}
@@ -331,8 +341,18 @@ const ChatContainer = ({
         sessionLoading={sessionLoading}
         mode={mode}
         onModeChange={handleModeChange}
-        onStitchImport={handleStitchImport}
-        onGallerySelect={handleGallerySelect}
+      />
+
+      {/* Design Mode Modals */}
+      <StitchImportModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        onImport={handleStitchImport}
+      />
+      <DesignGalleryModal
+        open={galleryModalOpen}
+        onOpenChange={setGalleryModalOpen}
+        onSelect={handleGallerySelect}
         organizationId={organizationId}
       />
     </div>
