@@ -1,4 +1,4 @@
-export type AgentMode = "chat" | "execution" | "web_search" | "image_search";
+export type AgentMode = "chat" | "execution" | "web_search" | "image_search" | "design";
 
 export interface SearchAttachment {
   type: 'code' | 'doc' | 'link' | 'image' | 'video';
@@ -43,4 +43,12 @@ export interface ImageSearchResult {
   thumbnailLink: string;
   contextLink: string;
   displayLink: string;
+}
+
+export interface DesignOutput {
+  imageUrl: string;
+  code: string;
+  prompt: string;
+  medium?: 'web' | 'app';
+  variants?: DesignOutput[];
 }

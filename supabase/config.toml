@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.vercel-branch-status]
 verify_jwt = false
+
+[functions.stitch-generate]
+verify_jwt = false

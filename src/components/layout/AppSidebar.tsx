@@ -32,7 +32,7 @@ const AppSidebar = () => {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border">
+    <Sidebar collapsible="icon" className="border-r border-border" data-tour="sidebar">
       <SidebarContent>
         <div className="flex h-14 items-center gap-2 border-b border-border px-4">
           <HolocronIcon className="h-5 w-5 shrink-0 text-primary" />

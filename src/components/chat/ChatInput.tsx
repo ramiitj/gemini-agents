@@ -103,6 +103,8 @@ const ChatInput = ({
             placeholder={
               attachments.length > 0
                 ? "Describe what you want to do with these attachments..."
+                : mode === "design"
+                ? "Describe the UI you want to design (e.g., 'a mobile app dashboard for fitness tracking')..."
                 : mode === "image_search"
                 ? "Search for images, icons, or visual inspiration..."
                 : mode === "web_search"

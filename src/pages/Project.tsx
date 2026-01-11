@@ -11,6 +11,8 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useOrganization } from "@/hooks/useOrganization";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import WelcomeTour, { projectTourSteps } from "@/components/onboarding/WelcomeTour";
+import { useOnboardingTour } from "@/hooks/useOnboardingTour";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
 
 interface ProjectData {
@@ -32,6 +34,8 @@ const Project = () => {
   const { id } = useParams();
   const { user, loading: authLoading } = useAuth();
   const { organization } = useOrganization();
+  const { showProjectTour, startProjectTour, completeProjectTour, hasSeenProjectTour } = useOnboardingTour();
+  
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
   const [visualContext, setVisualContext] = useState<VisualContext | null>(null);
@@ -55,6 +59,16 @@ const Project = () => {
 
     fetchProject();
   }, [id, user]);
+
+  // Trigger project tour on first visit
+  useEffect(() => {
+    if (project && !hasSeenProjectTour && !loading) {
+      const timer = setTimeout(() => {
+        startProjectTour();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [project, hasSeenProjectTour, loading, startProjectTour]);
 
   const handleSendToAI = useCallback((element: ElementInfo, request: string) => {
     setVisualContext({ element, request });
@@ -144,16 +158,36 @@ const Project = () => {
               maxSize={50}
               className="flex flex-col"
             >
-              <ChatContainer 
-                projectId={project.id} 
-                githubRepo={project.github_repo}
-                previewUrl={previewUrl}
-                visualContext={visualContext}
-                onVisualContextHandled={handleVisualContextHandled}
-              />
+              <div className="h-full" data-tour="chat-panel">
+                <ChatContainer 
+                  projectId={project.id} 
+                  githubRepo={project.github_repo}
+                  previewUrl={previewUrl}
+                  visualContext={visualContext}
+                  onVisualContextHandled={handleVisualContextHandled}
+                />
+              </div>
             </ResizablePanel>
 
             <ResizableHandle withHandle className="hover:bg-primary/10 transition-colors" />
+
+            {/* Preview Panel */}
+            <ResizablePanel 
+              defaultSize={45} 
+              minSize={25}
+              className="flex flex-col"
+            >
+              <div className="h-full" data-tour="preview-panel">
+                <PreviewPanel 
+                  projectId={project.id}
+                  vercelProjectId={project.vercel_project_id}
+                  githubRepo={project.github_repo}
+                  onSendToAI={handleSendToAI}
+                  onVercelSetup={handleVercelSetup}
+                  onPreviewUrlChange={handlePreviewUrlChange}
+                />
+              </div>
+            </ResizablePanel>
 
             {/* Preview Panel */}
             <ResizablePanel 
@@ -182,11 +216,20 @@ const Project = () => {
               collapsedSize={4}
               className="flex flex-col"
             >
-              <TeamSidebar organizationId={organization?.id || null} projectId={project.id} />
+              <div className="h-full" data-tour="team-panel">
+                <TeamSidebar organizationId={organization?.id || null} projectId={project.id} />
+              </div>
             </ResizablePanel>
           </ResizablePanelGroup>
         </main>
       </div>
+
+      {/* Welcome Tour */}
+      <WelcomeTour
+        run={showProjectTour}
+        steps={projectTourSteps}
+        onComplete={completeProjectTour}
+      />
     </SidebarProvider>
   );
 };

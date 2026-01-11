@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { GitBranch, FileCode, Pin, X } from "lucide-react";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
-import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata, ImageSearchResult } from "@/types/search";
+import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata, ImageSearchResult, DesignOutput } from "@/types/search";
 
 export interface Message {
   id: string;
@@ -23,6 +23,7 @@ export interface Message {
   mode?: AgentMode;
   groundingMetadata?: GroundingMetadata;
   imageResults?: ImageSearchResult[];
+  designOutput?: DesignOutput;
 }
 
 export interface VisualContext {
