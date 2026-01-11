@@ -122,7 +122,8 @@ const Project = () => {
           </header>
 
           <div className="flex flex-1 overflow-hidden">
-            <div className="flex w-1/2 flex-col border-r border-border">
+            {/* Chat Panel - ~35% */}
+            <div className="flex w-[35%] min-w-[320px] flex-col border-r border-border">
               <ChatContainer 
                 projectId={project.id} 
                 githubRepo={project.github_repo}
@@ -131,7 +132,8 @@ const Project = () => {
                 onVisualContextHandled={handleVisualContextHandled}
               />
             </div>
-            <div className="flex w-1/2 flex-col">
+            {/* Preview Panel - flex-1 */}
+            <div className="flex flex-1 flex-col border-r border-border">
               <PreviewPanel 
                 projectId={project.id}
                 vercelProjectId={project.vercel_project_id}
@@ -141,6 +143,7 @@ const Project = () => {
                 onPreviewUrlChange={handlePreviewUrlChange}
               />
             </div>
+            {/* Team Sidebar - fixed 280px */}
             <TeamSidebar organizationId={organization?.id || null} projectId={project.id} />
           </div>
         </main>

@@ -167,13 +167,16 @@ serve(async (req) => {
           );
           
           console.log('Added vercel.json for iframe embedding');
+          
+          // Wait for GitHub to fully process the commit before triggering deployment
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       } catch (e) {
         console.log('Could not add vercel.json (non-critical):', e);
       }
     }
     
-    // Trigger initial deployment
+    // Trigger initial deployment (now after vercel.json is committed)
     let deploymentData = null;
     try {
       const deployResponse = await fetch('https://api.vercel.com/v13/deployments', {

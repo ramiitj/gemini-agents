@@ -111,7 +111,7 @@ const ChatInput = ({
               ? "Ask questions or discuss your plans..."
               : "Describe what you want to build..."
           }
-          className="min-h-[80px] resize-none"
+          className="min-h-[60px] resize-none text-sm flex-1"
         />
         <Button 
           type="submit" 

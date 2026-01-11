@@ -205,14 +205,15 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
   // Show setup state if no Vercel project is configured
   if (!vercelProjectId) {
     return (
-      <div className="flex h-full flex-col">
-        <div className="flex items-center justify-between border-b border-border px-4">
-          <div className="flex">
+      <div className="flex h-full flex-col bg-background">
+        {/* Header - unified h-12 */}
+        <div className="flex h-12 items-center justify-between border-b border-border px-4 bg-muted/30">
+          <div className="flex items-center">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-3 text-sm transition-colors ${
+                className={`relative px-4 h-12 text-sm transition-colors ${
                   activeTab === tab.id
                     ? "border-b-2 border-foreground font-medium text-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -269,13 +270,14 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
   return (
     <div className="flex h-full flex-col">
       {/* Tabs */}
-      <div className="flex items-center justify-between border-b border-border px-4">
-        <div className="flex">
+      {/* Header - unified h-12 */}
+      <div className="flex h-12 items-center justify-between border-b border-border px-4 bg-muted/30">
+        <div className="flex items-center">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative px-4 py-3 text-sm transition-colors ${
+              className={`relative px-4 h-12 text-sm transition-colors ${
                 activeTab === tab.id
                   ? "border-b-2 border-foreground font-medium text-foreground"
                   : "text-muted-foreground hover:text-foreground"

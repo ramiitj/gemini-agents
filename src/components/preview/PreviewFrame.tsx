@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, ExternalLink, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import VisualEditOverlay from "./VisualEditOverlay";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
@@ -18,16 +18,24 @@ const PreviewFrame = ({
   onVisualEditCancel 
 }: PreviewFrameProps) => {
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const [key, setKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const handleRefresh = () => {
     setIsLoading(true);
+    setHasError(false);
     setKey((prev) => prev + 1);
   };
 
   const handleLoad = () => {
     setIsLoading(false);
+    setHasError(false);
+  };
+
+  const handleError = () => {
+    setIsLoading(false);
+    setHasError(true);
   };
 
   // Handle overlay selection - convert coordinates to ElementInfo
@@ -82,6 +90,33 @@ const PreviewFrame = ({
         </div>
       )}
 
+      {/* Error state */}
+      {hasError && !isLoading && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-muted/20 p-8">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <AlertCircle className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <div className="max-w-sm text-center">
+            <p className="text-sm font-medium text-foreground">Preview cannot load</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The deployment may need to be rebuilt with iframe headers
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retry
+            </Button>
+            <Button size="sm" asChild>
+              <a href={url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Open in New Tab
+              </a>
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Iframe - always rendered */}
       <iframe
         ref={iframeRef}
@@ -89,11 +124,12 @@ const PreviewFrame = ({
         src={url}
         className="h-full w-full border-0"
         onLoad={handleLoad}
+        onError={handleError}
         title="Preview"
       />
 
       {/* Visual Edit Overlay */}
-      {visualEditMode && !isLoading && (
+      {visualEditMode && !isLoading && !hasError && (
         <VisualEditOverlay
           onElementSelect={handleOverlaySelect}
           onCancel={onVisualEditCancel || (() => {})}
