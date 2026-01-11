@@ -43,7 +43,7 @@ const TeamSidebar = ({ organizationId, projectId }: TeamSidebarProps) => {
 
   return (
     <>
-      <div className="flex h-full w-full flex-col border-l border-border bg-background">
+      <div className="flex h-full w-full flex-col border-l border-border bg-background overflow-hidden">
         {/* Header - unified h-12 */}
         <div className="flex h-12 items-center justify-between border-b border-border px-4 bg-muted/30">
           <div className="flex items-center gap-2">
@@ -63,7 +63,7 @@ const TeamSidebar = ({ organizationId, projectId }: TeamSidebarProps) => {
           </Button>
         </div>
 
-        <Tabs defaultValue="discussions" className="flex-1 flex flex-col">
+        <Tabs defaultValue="discussions" className="flex-1 min-h-0 flex flex-col overflow-hidden">
           <TabsList className="mx-3 mt-2 grid grid-cols-2">
             <TabsTrigger value="discussions" className="text-xs gap-1 relative">
               <MessageSquare className="h-3 w-3" />
@@ -80,12 +80,12 @@ const TeamSidebar = ({ organizationId, projectId }: TeamSidebarProps) => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="discussions" className="flex-1 m-0 overflow-hidden">
+          <TabsContent value="discussions" className="flex-1 min-h-0 m-0 overflow-hidden flex flex-col">
             <TeamChat projectId={projectId} />
           </TabsContent>
 
-          <TabsContent value="members" className="flex-1 m-0 overflow-hidden flex flex-col">
-            <ScrollArea className="flex-1 p-3">
+          <TabsContent value="members" className="flex-1 min-h-0 m-0 overflow-hidden flex flex-col">
+            <ScrollArea className="flex-1 min-h-0 p-3">
               {loading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (

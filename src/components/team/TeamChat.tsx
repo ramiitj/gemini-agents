@@ -104,7 +104,7 @@ const TeamChat = ({ projectId, changeRequestId, title }: TeamChatProps) => {
 
   if (!changeRequestId && !projectId) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6">
+      <div className="flex flex-col items-center justify-center flex-1 min-h-0 text-muted-foreground p-6">
         <MessageSquare className="h-8 w-8 mb-2" />
         <p className="text-sm text-center">No active discussion</p>
       </div>
@@ -112,14 +112,14 @@ const TeamChat = ({ projectId, changeRequestId, title }: TeamChatProps) => {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
       {title && (
         <div className="border-b border-border px-4 py-3">
           <h3 className="text-sm font-medium truncate">{title}</h3>
         </div>
       )}
 
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 min-h-0 p-4">
         {loading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (

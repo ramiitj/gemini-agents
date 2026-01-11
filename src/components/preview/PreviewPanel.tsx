@@ -268,7 +268,7 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
   const pendingChangesCount = changes.filter(c => !c.approved_at).length;
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Header - unified h-12 with tabs and contextual actions */}
       <div className="flex h-12 items-center justify-between border-b border-border px-4 bg-muted/30">
         <div className="flex items-center gap-4">
@@ -342,7 +342,7 @@ const PreviewPanel = ({ projectId, vercelProjectId, githubRepo, conversationId, 
       </div>
 
       {/* Content */}
-      <div className="relative flex-1 overflow-auto bg-background">
+      <div className="relative flex-1 min-h-0 overflow-auto bg-background">
         {activeTab === "preview" && (
           <div className="flex h-full flex-col animate-fade-in">
             {/* Preview iframe or states - no sub-header */}
