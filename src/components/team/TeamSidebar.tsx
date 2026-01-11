@@ -43,7 +43,7 @@ const TeamSidebar = ({ organizationId, projectId }: TeamSidebarProps) => {
 
   return (
     <>
-      <div className="flex w-[280px] flex-col border-l border-border bg-background">
+      <div className="flex h-full w-full flex-col border-l border-border bg-background">
         {/* Header - unified h-12 */}
         <div className="flex h-12 items-center justify-between border-b border-border px-4 bg-muted/30">
           <div className="flex items-center gap-2">

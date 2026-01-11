@@ -10,6 +10,7 @@ import NotificationDropdown from "@/components/notifications/NotificationDropdow
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useOrganization } from "@/hooks/useOrganization";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import type { ElementInfo } from "@/lib/visual-edit-injector";
 
 interface ProjectData {
@@ -85,9 +86,19 @@ const Project = () => {
             <header className="flex h-14 items-center border-b border-border px-4">
               <Skeleton className="h-6 w-32" />
             </header>
-            <div className="flex flex-1 p-4">
-              <Skeleton className="h-full w-full" />
-            </div>
+            <ResizablePanelGroup direction="horizontal" className="flex-1">
+              <ResizablePanel defaultSize={30}>
+                <Skeleton className="h-full w-full" />
+              </ResizablePanel>
+              <ResizableHandle />
+              <ResizablePanel defaultSize={45}>
+                <Skeleton className="h-full w-full" />
+              </ResizablePanel>
+              <ResizableHandle />
+              <ResizablePanel defaultSize={25}>
+                <Skeleton className="h-full w-full" />
+              </ResizablePanel>
+            </ResizablePanelGroup>
           </main>
         </div>
       </SidebarProvider>
@@ -121,9 +132,18 @@ const Project = () => {
             <NotificationDropdown />
           </header>
 
-          <div className="flex flex-1 overflow-hidden">
-            {/* Chat Panel - ~35% */}
-            <div className="flex w-[35%] min-w-[320px] flex-col border-r border-border">
+          <ResizablePanelGroup 
+            direction="horizontal" 
+            className="flex-1"
+            autoSaveId="project-workspace"
+          >
+            {/* Agent Panel */}
+            <ResizablePanel 
+              defaultSize={30} 
+              minSize={20} 
+              maxSize={50}
+              className="flex flex-col"
+            >
               <ChatContainer 
                 projectId={project.id} 
                 githubRepo={project.github_repo}
@@ -131,9 +151,16 @@ const Project = () => {
                 visualContext={visualContext}
                 onVisualContextHandled={handleVisualContextHandled}
               />
-            </div>
-            {/* Preview Panel - flex-1 */}
-            <div className="flex flex-1 flex-col border-r border-border">
+            </ResizablePanel>
+
+            <ResizableHandle withHandle className="hover:bg-primary/10 transition-colors" />
+
+            {/* Preview Panel */}
+            <ResizablePanel 
+              defaultSize={45} 
+              minSize={25}
+              className="flex flex-col"
+            >
               <PreviewPanel 
                 projectId={project.id}
                 vercelProjectId={project.vercel_project_id}
@@ -142,10 +169,22 @@ const Project = () => {
                 onVercelSetup={handleVercelSetup}
                 onPreviewUrlChange={handlePreviewUrlChange}
               />
-            </div>
-            {/* Team Sidebar - fixed 280px */}
-            <TeamSidebar organizationId={organization?.id || null} projectId={project.id} />
-          </div>
+            </ResizablePanel>
+
+            <ResizableHandle withHandle className="hover:bg-primary/10 transition-colors" />
+
+            {/* Team Panel */}
+            <ResizablePanel 
+              defaultSize={25} 
+              minSize={15} 
+              maxSize={35}
+              collapsible
+              collapsedSize={4}
+              className="flex flex-col"
+            >
+              <TeamSidebar organizationId={organization?.id || null} projectId={project.id} />
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </main>
       </div>
     </SidebarProvider>
