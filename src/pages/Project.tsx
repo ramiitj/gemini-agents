@@ -165,6 +165,7 @@ const Project = () => {
                   previewUrl={previewUrl}
                   visualContext={visualContext}
                   onVisualContextHandled={handleVisualContextHandled}
+                  organizationId={organization?.id}
                 />
               </div>
             </ResizablePanel>
