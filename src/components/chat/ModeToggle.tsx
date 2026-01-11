@@ -1,4 +1,4 @@
-import { MessageSquare, Zap, Globe, Image } from "lucide-react";
+import { MessageSquare, Zap, Globe, Image, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AgentMode } from "@/types/search";
 
@@ -10,7 +10,7 @@ interface ModeToggleProps {
 
 const ModeToggle = ({ mode, onModeChange, disabled }: ModeToggleProps) => {
   return (
-    <div className="flex rounded-lg border border-border bg-muted/50 p-0.5">
+    <div className="flex rounded-lg border border-border bg-muted/50 p-0.5" data-tour="mode-toggle">
       <button
         onClick={() => onModeChange("chat")}
         disabled={disabled}
@@ -62,6 +62,19 @@ const ModeToggle = ({ mode, onModeChange, disabled }: ModeToggleProps) => {
       >
         <Image className="h-3.5 w-3.5" />
         Images
+      </button>
+      <button
+        onClick={() => onModeChange("design")}
+        disabled={disabled}
+        className={cn(
+          "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all",
+          mode === "design"
+            ? "bg-pink-500 text-white shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        <Palette className="h-3.5 w-3.5" />
+        Design
       </button>
     </div>
   );

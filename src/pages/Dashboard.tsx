@@ -13,6 +13,8 @@ import CreateProjectModal from "@/components/dashboard/CreateProjectModal";
 import CreateOrganizationModal from "@/components/dashboard/CreateOrganizationModal";
 import OrganizationSwitcher from "@/components/dashboard/OrganizationSwitcher";
 import EmptyProjects from "@/components/dashboard/EmptyProjects";
+import WelcomeTour, { dashboardTourSteps } from "@/components/onboarding/WelcomeTour";
+import { useOnboardingTour } from "@/hooks/useOnboardingTour";
 import { formatDistanceToNow } from "date-fns";
 
 const Dashboard = () => {
@@ -20,9 +22,11 @@ const Dashboard = () => {
   const { organizations, organization, loading: orgLoading, hasInitialized, createOrganization } = useOrganization();
   const { projects, loading: projectsLoading, createProject } = useProjects();
   const navigate = useNavigate();
+  const { showDashboardTour, startDashboardTour, completeDashboardTour, hasSeenDashboardTour } = useOnboardingTour();
 
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
+  const [justCreatedOrg, setJustCreatedOrg] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -60,6 +64,26 @@ const Dashboard = () => {
 
   if (!user) return null;
 
+  // Trigger dashboard tour after org creation
+  useEffect(() => {
+    if (justCreatedOrg && !hasSeenDashboardTour && organization) {
+      // Small delay to ensure modal is closed
+      const timer = setTimeout(() => {
+        startDashboardTour();
+        setJustCreatedOrg(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [justCreatedOrg, hasSeenDashboardTour, organization, startDashboardTour]);
+
+  const handleOrgCreated = async (name: string) => {
+    const result = await createOrganization(name);
+    if (result) {
+      setJustCreatedOrg(true);
+    }
+    return result;
+  };
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
@@ -71,13 +95,20 @@ const Dashboard = () => {
             <div className="flex items-center gap-3">
               <SidebarTrigger />
               {organization ? (
-                <OrganizationSwitcher onCreateNew={() => setCreateOrgOpen(true)} />
+                <div data-tour="org-switcher">
+                  <OrganizationSwitcher onCreateNew={() => setCreateOrgOpen(true)} />
+                </div>
               ) : (
                 <h1 className="text-sm font-medium text-foreground">Projects</h1>
               )}
             </div>
             {organization && (
-              <Button size="sm" className="gap-2" onClick={() => setCreateProjectOpen(true)}>
+              <Button 
+                size="sm" 
+                className="gap-2" 
+                onClick={() => setCreateProjectOpen(true)}
+                data-tour="new-project"
+              >
                 <Plus className="h-4 w-4" />
                 New project
               </Button>
@@ -95,7 +126,7 @@ const Dashboard = () => {
             ) : projects.length === 0 ? (
               <EmptyProjects onCreateProject={() => setCreateProjectOpen(true)} />
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-tour="project-grid">
                 {projects.map((project) => (
                   <Link key={project.id} to={`/project/${project.id}`}>
                     <ProjectCard
@@ -117,6 +148,13 @@ const Dashboard = () => {
         </main>
       </div>
 
+      {/* Welcome Tour */}
+      <WelcomeTour
+        run={showDashboardTour}
+        steps={dashboardTourSteps}
+        onComplete={completeDashboardTour}
+      />
+
       {/* Modals */}
       <CreateProjectModal
         open={createProjectOpen}
@@ -127,7 +165,7 @@ const Dashboard = () => {
       <CreateOrganizationModal
         open={needsOnboarding || createOrgOpen}
         onOpenChange={setCreateOrgOpen}
-        onSubmit={createOrganization}
+        onSubmit={handleOrgCreated}
         isOnboarding={needsOnboarding}
       />
     </SidebarProvider>

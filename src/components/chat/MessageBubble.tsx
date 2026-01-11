@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import SearchResultsPanel from "./SearchResultsPanel";
 import ImageResultsGrid from "./ImageResultsGrid";
-import type { SearchAttachment } from "@/types/search";
+import DesignResultsPanel from "./DesignResultsPanel";
+import type { SearchAttachment, DesignOutput } from "@/types/search";
 import { parseMessageContent, MessageBlock } from "@/lib/message-parser";
 import { renderTextWithLinks } from "./LinkRenderer";
 import PhaseHeader from "./blocks/PhaseHeader";
@@ -20,6 +21,7 @@ interface MessageBubbleProps {
   message: Message;
   onPinResult?: (result: SearchAttachment) => void;
   pinnedUrls?: string[];
+  onUseDesignContext?: (design: DesignOutput, type: 'image' | 'code') => void;
 }
 
 // Render diff line with proper coloring
@@ -113,7 +115,7 @@ function renderBlock(block: MessageBlock, index: number): React.ReactNode {
 }
 
 const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
-  ({ message, onPinResult, pinnedUrls = [] }, ref) => {
+  ({ message, onPinResult, pinnedUrls = [], onUseDesignContext }, ref) => {
     if (message.role === "system") {
       return (
         <div ref={ref} className="flex justify-center">
@@ -125,8 +127,10 @@ const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
     const isUser = message.role === "user";
     const isWebSearch = message.mode === 'web_search';
     const isImageSearch = message.mode === 'image_search';
+    const isDesignMode = message.mode === 'design';
     const hasGroundingData = (message.groundingMetadata?.groundingChunks?.length ?? 0) > 0;
     const hasImageResults = (message.imageResults?.length ?? 0) > 0;
+    const hasDesignOutput = !!message.designOutput;
     
     // Parse assistant messages into structured blocks
     const blocks = !isUser ? parseMessageContent(message.content) : [];
@@ -146,10 +150,25 @@ const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           )}
           
-          {/* Assistant messages: structured blocks (hide when showing image results) */}
-          {!isUser && !(isImageSearch && hasImageResults) && (
+          {/* Assistant messages: structured blocks (hide when showing image/design results) */}
+          {!isUser && !(isImageSearch && hasImageResults) && !(isDesignMode && hasDesignOutput) && (
             <div className="space-y-1">
               {blocks.map((block, index) => renderBlock(block, index))}
+            </div>
+          )}
+
+          {/* Design output for design mode */}
+          {!isUser && isDesignMode && hasDesignOutput && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Generated UI design for your request
+              </p>
+              <DesignResultsPanel
+                designs={[message.designOutput!, ...(message.designOutput!.variants || [])]}
+                onUseAsContext={(design, type) => {
+                  onUseDesignContext?.(design, type);
+                }}
+              />
             </div>
           )}
 

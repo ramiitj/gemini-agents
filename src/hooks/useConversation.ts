@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
-import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata, ImageSearchResult } from "@/types/search";
+import type { FileAttachment, SearchAttachment, AgentMode, GroundingMetadata, ImageSearchResult, DesignOutput } from "@/types/search";
 
 interface Message {
   id: string;
@@ -18,6 +18,7 @@ interface Message {
   mode?: AgentMode;
   groundingMetadata?: GroundingMetadata;
   imageResults?: ImageSearchResult[];
+  designOutput?: DesignOutput;
 }
 
 interface Conversation {
@@ -262,6 +263,7 @@ export function useConversation(projectId: string | undefined) {
         mode: aiResponse.mode,
         groundingMetadata: aiResponse.groundingMetadata,
         imageResults: aiResponse.imageResults,
+        designOutput: aiResponse.designOutput,
         codeChanges: aiResponse.codeChanges
       };
 
