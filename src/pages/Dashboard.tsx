@@ -17,7 +17,7 @@ import { formatDistanceToNow } from "date-fns";
 
 const Dashboard = () => {
   const { user, loading: authLoading } = useAuth();
-  const { organizations, organization, loading: orgLoading, createOrganization } = useOrganization();
+  const { organizations, organization, loading: orgLoading, hasInitialized, createOrganization } = useOrganization();
   const { projects, loading: projectsLoading, createProject } = useProjects();
   const navigate = useNavigate();
 
@@ -31,10 +31,11 @@ const Dashboard = () => {
     }
   }, [authLoading, user, navigate]);
 
-  // Show onboarding if no organizations
-  const needsOnboarding = !orgLoading && organizations.length === 0;
+  // Show onboarding only after we've confirmed there are no orgs
+  const needsOnboarding = hasInitialized && organizations.length === 0;
 
-  if (authLoading || orgLoading) {
+  // Wait for both auth and org initialization to complete
+  if (authLoading || !hasInitialized) {
     return (
       <SidebarProvider>
         <div className="flex min-h-screen w-full">

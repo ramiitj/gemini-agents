@@ -67,6 +67,55 @@ const MessageList = ({
   const loadingConfig = getModeLoadingConfig(currentMode);
   const LoadingIcon = loadingConfig.icon;
 
+  // Empty state when no messages and not typing
+  if (messages.length === 0 && !isTyping) {
+    return (
+      <div className="flex-1 min-h-0 overflow-y-auto p-6">
+        <div className="flex flex-col items-center justify-center h-full text-center max-w-md mx-auto">
+          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <Rocket className="h-6 w-6 text-primary" />
+          </div>
+          <h3 className="text-lg font-medium text-foreground mb-2">
+            Ready to build
+          </h3>
+          <p className="text-sm text-muted-foreground mb-6">
+            Describe what you want to create or change. Use the mode toggles below to search the web, find images, or execute code changes.
+          </p>
+          <div className="grid grid-cols-2 gap-3 w-full text-left">
+            <div className="p-3 rounded-lg border border-border bg-muted/30">
+              <div className="flex items-center gap-2 text-sm font-medium mb-1">
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                Chat
+              </div>
+              <p className="text-xs text-muted-foreground">Discuss ideas and get suggestions</p>
+            </div>
+            <div className="p-3 rounded-lg border border-border bg-muted/30">
+              <div className="flex items-center gap-2 text-sm font-medium mb-1">
+                <Rocket className="h-4 w-4 text-muted-foreground" />
+                Execute
+              </div>
+              <p className="text-xs text-muted-foreground">Make code changes to your project</p>
+            </div>
+            <div className="p-3 rounded-lg border border-border bg-muted/30">
+              <div className="flex items-center gap-2 text-sm font-medium mb-1">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                Web Search
+              </div>
+              <p className="text-xs text-muted-foreground">Find documentation and examples</p>
+            </div>
+            <div className="p-3 rounded-lg border border-border bg-muted/30">
+              <div className="flex items-center gap-2 text-sm font-medium mb-1">
+                <Image className="h-4 w-4 text-muted-foreground" />
+                Images
+              </div>
+              <p className="text-xs text-muted-foreground">Search for visual inspiration</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-4">
       <div className="space-y-4">

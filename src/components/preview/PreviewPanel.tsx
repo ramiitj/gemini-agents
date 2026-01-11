@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { ExternalLink, RotateCcw, AlertCircle, GitBranch, Settings, MousePointer, Loader2, RefreshCw, Camera, Users } from "lucide-react";
+import { ExternalLink, RotateCcw, AlertCircle, GitBranch, Settings, MousePointer, Loader2, RefreshCw, Camera, Users, Code } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DiffViewer from "./DiffViewer";
 import DeploymentStatus from "./DeploymentStatus";
@@ -445,15 +445,15 @@ const BuildingState = () => (
 const IdleState = ({ onDeploy }: { onDeploy: () => void }) => (
   <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-muted/20 p-8">
     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-      <GitBranch className="h-6 w-6 text-muted-foreground" />
+      <Code className="h-6 w-6 text-muted-foreground" />
     </div>
     <div className="max-w-sm text-center">
-      <p className="text-sm font-medium text-foreground">Ready to deploy</p>
-      <p className="mt-2 text-xs text-muted-foreground">
-        Click the button below to trigger a new deployment from your repository.
+      <h3 className="text-lg font-medium text-foreground mb-2">Ready to deploy</h3>
+      <p className="text-sm text-muted-foreground">
+        Click below to trigger a new deployment from your repository.
       </p>
     </div>
-    <Button size="sm" onClick={onDeploy}>
+    <Button onClick={onDeploy}>
       Deploy now
     </Button>
   </div>
