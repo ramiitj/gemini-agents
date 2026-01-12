@@ -2311,49 +2311,48 @@ serve(async (req) => {
     const modeInstructions = mode === 'chat' 
       ? `## CHAT MODE - CONVERSATIONAL AI ASSISTANT
 
-### YOUR PERSONALITY
-- Be friendly, helpful, and approachable
-- Use natural conversational language
+### YOUR PRIMARY ROLE
+You are a helpful AI assistant. Have a natural conversation with the user.
+PRIORITIZE conversation over tool usage. You do NOT need to use tools for every message.
+
+### CRITICAL RULES
+1. RESPOND CONVERSATIONALLY FIRST - You can answer most questions without using any tools
+2. Only use tools when EXPLICITLY needed (user asks "show me the file", "find X in the code")
+3. If a tool fails, acknowledge briefly and continue the conversation without it
+4. NEVER mention deployment, pushing to GitHub, or execution - those are for Execute mode
+
+### WHEN TO USE TOOLS (only these cases)
+- User says "show me [file]" → file_read
+- User says "find [code/pattern]" → search_code
+- User says "list files in [path]" → list_directory
+- User wants to analyze something specific in the code
+
+### WHEN NOT TO USE TOOLS (most cases)
+- General questions about coding concepts
+- Explaining how something works
+- Discussing architecture or design patterns
+- Planning features or changes
+- Answering "how do I..." questions
+- Providing examples or guidance
+
+### RESPONSE STYLE
 - Keep responses concise: 2-4 sentences per point
-- Ask clarifying questions when needed
-- Show enthusiasm about interesting solutions
-
-### RESPONSE STRUCTURE
-- Start with a direct answer or acknowledgment
-- Explain the "why" briefly
+- Start with a direct answer
 - Offer 1-2 options when relevant
-- End with a clear next step or question
+- End with a question or next step
 
-### EXAMPLE GOOD RESPONSE:
-"Found the search in src/hooks/useSearch.ts. It uses a basic filter - we could add fuzzy matching for better results. Want me to show you what that would look like?"
+### ERROR RECOVERY
+If a tool fails, say something like:
+"I couldn't access that directly. Could you paste the relevant code, or let me explain the concept?"
 
-### EXAMPLE BAD RESPONSE (TOO LONG - NEVER DO THIS):
-"I have thoroughly analyzed your codebase and discovered that the search functionality is implemented within the useSearch hook located in the src/hooks directory. This hook currently utilizes a basic filtering mechanism..."
-
-### CODE IN CHAT MODE
-- Show SHORT snippets only (5-15 lines max)
-- Focus on the specific part being discussed
-- Never output entire files
-
-### MANDATORY: Use Attachments and Search Results
-When the message includes "USER ATTACHMENTS" or "USER-SELECTED SEARCH RESULTS":
-- Read them CAREFULLY before answering
-- QUOTE file names and snippets when referencing
-- Do NOT ignore attached content
-
-### When to Search
-If the user asks "where is...", "find...", "show usages...":
-1. Use search_code or list_directory FIRST
-2. Show relevant files and snippets
-3. Do NOT guess - verify by searching
+### IF USER ASKS TO MAKE CODE CHANGES
+Simply say: "I can help plan this! To implement it, switch to Execute mode."
 
 ### ALLOWED tools:
 github_clone_repo, file_read, search_code, list_directory, generate_diff, capture_screenshot, analyze_visual_element, vercel_get_deployment_status, get_build_logs, analyze_dependencies, web_search
 
-### BLOCKED (tell user to switch to Execute mode):
-file_write, file_delete, git_add_commit_push, vercel_create_project, vercel_trigger_deployment, github_create_pull_request, add_dependency, autonomous_deploy_and_verify
-
-If the user asks to make changes, explain what you WOULD do briefly and ask them to switch to Execute mode.`
+### ABSOLUTELY BLOCKED (do not even mention these):
+file_write, file_delete, git_add_commit_push, vercel_create_project, vercel_trigger_deployment, github_create_pull_request, add_dependency, autonomous_deploy_and_verify`
       : `## EXECUTION MODE - AUTONOMOUS AGENT
 
 YOU ARE A FULLY AUTONOMOUS AI CODING AGENT.
@@ -2713,8 +2712,23 @@ User Request: ${message}`;
       );
     }
 
+    // Filter history based on mode to prevent context contamination
+    let filteredHistory = history;
+    
+    // For chat mode, filter out execution-specific history that confuses the model
+    if (mode === 'chat') {
+      filteredHistory = history.filter((m: any) => {
+        const content = (m.content || '').toLowerCase();
+        // Remove execution-specific messages
+        return !content.includes('deploying to vercel') &&
+               !content.includes('pushed to github') &&
+               !content.includes('autonomous_deploy') &&
+               !content.includes('file_write');
+      });
+    }
+    
     const messages: any[] = [
-      ...history.map((m: any) => ({
+      ...filteredHistory.map((m: any) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }]
       })),
@@ -3053,8 +3067,23 @@ You help users find information on the web by searching Google and providing com
     let iterations = 0;
     const maxIterations = 20; // Increased for autonomous loops
     const executedTools: string[] = []; // Track all tool calls
+    
+    // Loop detection - track repeated tool calls
+    const toolCallHistory: string[] = [];
+    const MAX_SAME_TOOL_CALLS = 3;
+    
+    // Timeout protection - 45 seconds to leave room for response
+    const AGENT_TIMEOUT_MS = 45000;
+    const agentStartTime = Date.now();
 
     while (iterations < maxIterations) {
+      // Timeout check
+      if (Date.now() - agentStartTime > AGENT_TIMEOUT_MS) {
+        console.warn('[Agent] Timeout reached after', (Date.now() - agentStartTime) / 1000, 'seconds');
+        finalResponse += '\n\nNote: Operation timed out. Partial results shown above.';
+        break;
+      }
+      
       iterations++;
       console.log(`Agent iteration ${iterations}`);
       
@@ -3072,9 +3101,12 @@ You help users find information on the web by searching Google and providing com
           },
           contents: messages,
           tools: [{ functionDeclarations: activeTools }],
-          toolConfig: { functionCallingConfig: { mode: 'ANY' } },
+          // CRITICAL: Mode-specific tool config
+          // - 'ANY' forces tool usage (required for execution mode to actually make changes)
+          // - 'AUTO' allows model to decide (better for chat mode to allow pure conversation)
+          toolConfig: { functionCallingConfig: { mode: mode === 'execution' ? 'ANY' : 'AUTO' } },
           generationConfig: {
-            temperature: 0.2,
+            temperature: mode === 'chat' ? 0.7 : 0.2, // More creative in chat, precise in execution
             maxOutputTokens: 8192
           }
         })
@@ -3107,6 +3139,26 @@ You help users find information on the web by searching Google and providing com
           
           console.log(`Tool call: ${name}`, args);
           executedTools.push(name);
+          
+          // Check for repeated tool calls (loop detection)
+          const toolCallKey = `${name}:${JSON.stringify(args)}`;
+          const recentSameCalls = toolCallHistory.filter(t => t === toolCallKey).length;
+          
+          if (recentSameCalls >= MAX_SAME_TOOL_CALLS) {
+            console.warn(`[Agent] Repeated tool call detected (${recentSameCalls + 1}x): ${name}`);
+            toolResults.push({
+              functionResponse: {
+                name,
+                response: { 
+                  error: `This tool has been called ${recentSameCalls + 1} times with the same arguments. Try a different approach or provide the response based on what you know.`,
+                  repeated: true
+                }
+              }
+            });
+            continue;
+          }
+          
+          toolCallHistory.push(toolCallKey);
           
           if (mode === 'chat' && !chatModeTools.includes(name)) {
             toolResults.push({
