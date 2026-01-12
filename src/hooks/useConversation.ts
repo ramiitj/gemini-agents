@@ -208,25 +208,18 @@ export function useConversation(projectId: string | undefined) {
 
       let responseData: any;
 
-      // Design mode: call stitch-generate directly (bypass ai-agent)
+      // Design mode: Guide user to use the Design Studio panel (Stitch import workflow)
+      // The stitch-generate API is not functional, so we provide guidance instead
       if (mode === 'design') {
-        const { data: designResult, error: designError } = await supabase.functions.invoke('stitch-generate', {
-          body: {
-            prompt: content,
-            imageUrl: attachments?.find(a => a.type === 'screenshot')?.preview,
-            medium: 'web'
-          }
-        });
-
-        if (designError) throw designError;
-
         responseData = {
-          response: designResult?.success 
-            ? `Generated UI design for: "${content}"` 
-            : `Failed to generate design: ${designResult?.error || 'Unknown error'}`,
-          success: designResult?.success,
-          mode: 'design',
-          designOutput: designResult?.designOutput
+          response: `To create designs, use the Design Studio panel:\n\n` +
+                    `1. Click "Open in Stitch" to open Google's AI design tool\n` +
+                    `2. Create your design in Stitch using this prompt: "${content}"\n` +
+                    `3. Copy the generated code from Stitch\n` +
+                    `4. Click "Import from Stitch" to paste it here\n\n` +
+                    `Once imported, you can use the design in Chat or Execute mode.`,
+          success: true,
+          mode: 'design'
         };
       } else {
         // All other modes: call AI agent
@@ -297,13 +290,29 @@ export function useConversation(projectId: string | undefined) {
     } catch (error: any) {
       console.error('Error sending message:', error);
       
+      // Mode-specific error messages for better UX
+      let errorContent = 'I encountered an issue processing your request.';
+      
+      if (mode === 'chat') {
+        errorContent = 'I had trouble connecting. Let me try to help anyway - could you rephrase your question or provide more details?';
+      } else if (mode === 'execution') {
+        errorContent = `Execution error: ${error.message || 'Could not complete the operation'}. Check the Agent Activity panel for details, or try a simpler request.`;
+      } else if (mode === 'web_search') {
+        errorContent = 'Web search failed. Try rephrasing your query or check your connection.';
+      } else if (mode === 'image_search') {
+        errorContent = 'Image search failed. Try a different search term.';
+      } else if (mode === 'design') {
+        errorContent = 'Design generation is not available. Use "Open in Stitch" to create designs manually, then "Import from Stitch" to bring them here.';
+      }
+      
       // Add error message
       const errorMessage: Message = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: `Error: ${error.message || 'Failed to process request'}`,
+        content: errorContent,
         timestamp: new Date(),
-        status: 'error'
+        status: 'error',
+        mode
       };
       setMessages(prev => [...prev, errorMessage]);
       
