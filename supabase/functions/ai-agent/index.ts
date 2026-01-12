@@ -2719,11 +2719,14 @@ User Request: ${message}`;
     if (mode === 'chat') {
       filteredHistory = history.filter((m: any) => {
         const content = (m.content || '').toLowerCase();
-        // Remove execution-specific messages
+        // Remove execution-specific messages and code change artifacts
         return !content.includes('deploying to vercel') &&
                !content.includes('pushed to github') &&
                !content.includes('autonomous_deploy') &&
-               !content.includes('file_write');
+               !content.includes('file_write') &&
+               !content.includes('code changes') &&
+               !content.includes('--- a/') &&
+               !content.includes('+++ b/');
       });
     }
     
@@ -3237,12 +3240,14 @@ You help users find information on the web by searching Google and providing com
         .trim();
     };
 
-    // Collect code changes from staged files for response
-    const codeChanges = Object.entries(toolContext.stagedFiles).map(([filePath, content]: [string, any]) => ({
-      file: filePath,
-      diff: generateUnifiedDiff(filePath, content.original || '', content.modified || ''),
-      action: content.original ? 'modified' : 'added'
-    }));
+    // Collect code changes from staged files for response (ONLY in execution mode)
+    const codeChanges = mode === 'execution' 
+      ? Object.entries(toolContext.stagedFiles).map(([filePath, content]: [string, any]) => ({
+          file: filePath,
+          diff: generateUnifiedDiff(filePath, content.original || '', content.modified || ''),
+          action: content.original ? 'modified' : 'added'
+        }))
+      : [];
 
     return new Response(
       JSON.stringify({ 
@@ -3251,7 +3256,8 @@ You help users find information on the web by searching Google and providing com
         success: true,
         mode,
         branch: toolContext.currentRepo?.branch,
-        codeChanges: codeChanges.length > 0 ? codeChanges : undefined
+        // Only include codeChanges in execution mode when there are actual changes
+        codeChanges: mode === 'execution' && codeChanges.length > 0 ? codeChanges : undefined
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

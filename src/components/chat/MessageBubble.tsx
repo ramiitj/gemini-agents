@@ -186,8 +186,8 @@ const MessageBubble = React.forwardRef<HTMLDivElement, MessageBubbleProps>(
             </div>
           )}
           
-          {/* Code changes section (from agent execution) */}
-          {message.codeChanges && message.codeChanges.length > 0 && (
+          {/* Code changes section - ONLY show in execution mode */}
+          {message.mode === 'execution' && message.codeChanges && message.codeChanges.length > 0 && (
             <div className="mt-4 space-y-3 border-t border-border/50 pt-3">
               <div className="text-xs font-medium text-muted-foreground flex items-center gap-2">
                 <FileCode className="h-3.5 w-3.5" />
