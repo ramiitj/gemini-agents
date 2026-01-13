@@ -160,12 +160,8 @@ const Auth = () => {
       return;
     }
 
-    // If there's a pending invitation, redirect to accept it
-    if (pendingInvitation && isSignUp) {
-      navigate(`/accept-invite/${pendingInvitation.token}`);
-    } else {
-      navigate(redirectPath || "/dashboard");
-    }
+    // Always navigate to dashboard - useOrganization will auto-accept pending invitations
+    navigate(redirectPath || "/dashboard");
   };
 
   return (
@@ -185,7 +181,7 @@ const Auth = () => {
             <p className="font-medium text-foreground">You have a pending invitation!</p>
             <p className="text-muted-foreground mt-1">
               You've been invited to <strong>{pendingInvitation.orgName}</strong>. 
-              Complete signup to join automatically.
+              After signup, you'll automatically join with the assigned role and permissions.
             </p>
           </div>
         )}
