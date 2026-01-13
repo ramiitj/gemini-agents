@@ -974,6 +974,75 @@ export type Database = {
         }
         Relationships: []
       }
+      team_actions: {
+        Row: {
+          acted_by: string | null
+          action_comment: string | null
+          action_type: string
+          branch_name: string | null
+          change_summary: string | null
+          comment_id: string | null
+          created_at: string | null
+          files_changed: Json | null
+          id: string
+          initiated_by: string
+          pr_url: string | null
+          preview_url: string | null
+          production_url: string | null
+          project_id: string
+          resolved_at: string | null
+        }
+        Insert: {
+          acted_by?: string | null
+          action_comment?: string | null
+          action_type: string
+          branch_name?: string | null
+          change_summary?: string | null
+          comment_id?: string | null
+          created_at?: string | null
+          files_changed?: Json | null
+          id?: string
+          initiated_by: string
+          pr_url?: string | null
+          preview_url?: string | null
+          production_url?: string | null
+          project_id: string
+          resolved_at?: string | null
+        }
+        Update: {
+          acted_by?: string | null
+          action_comment?: string | null
+          action_type?: string
+          branch_name?: string | null
+          change_summary?: string | null
+          comment_id?: string | null
+          created_at?: string | null
+          files_changed?: Json | null
+          id?: string
+          initiated_by?: string
+          pr_url?: string | null
+          preview_url?: string | null
+          production_url?: string | null
+          project_id?: string
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_actions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "team_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_actions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_comments: {
         Row: {
           attachments: Json | null

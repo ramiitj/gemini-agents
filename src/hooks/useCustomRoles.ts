@@ -18,6 +18,8 @@ export interface Permissions {
     view: boolean;
     invite: boolean;
     manage: boolean;
+    approve: boolean;  // Can approve/reject changes in team chat
+    merge: boolean;    // Can merge to main branch
   };
   settings: {
     view: boolean;
@@ -43,7 +45,7 @@ export interface CustomRole {
 export const DEFAULT_PERMISSIONS: Permissions = {
   projects: { view: true, create: false, edit: false, delete: false },
   deployments: { view: true, trigger: false, manage: false },
-  team: { view: true, invite: false, manage: false },
+  team: { view: true, invite: false, manage: false, approve: false, merge: false },
   settings: { view: false, edit: false },
   chat: { view: true, send: true, moderate: false }
 };
@@ -52,28 +54,28 @@ export const PRESET_PERMISSIONS: Record<string, Permissions> = {
   owner: {
     projects: { view: true, create: true, edit: true, delete: true },
     deployments: { view: true, trigger: true, manage: true },
-    team: { view: true, invite: true, manage: true },
+    team: { view: true, invite: true, manage: true, approve: true, merge: true },
     settings: { view: true, edit: true },
     chat: { view: true, send: true, moderate: true }
   },
   admin: {
     projects: { view: true, create: true, edit: true, delete: true },
     deployments: { view: true, trigger: true, manage: true },
-    team: { view: true, invite: true, manage: true },
+    team: { view: true, invite: true, manage: true, approve: true, merge: true },
     settings: { view: true, edit: true },
     chat: { view: true, send: true, moderate: true }
   },
   editor: {
     projects: { view: true, create: true, edit: true, delete: false },
     deployments: { view: true, trigger: true, manage: false },
-    team: { view: true, invite: false, manage: false },
+    team: { view: true, invite: false, manage: false, approve: false, merge: false },
     settings: { view: true, edit: false },
     chat: { view: true, send: true, moderate: false }
   },
   viewer: {
     projects: { view: true, create: false, edit: false, delete: false },
     deployments: { view: true, trigger: false, manage: false },
-    team: { view: true, invite: false, manage: false },
+    team: { view: true, invite: false, manage: false, approve: false, merge: false },
     settings: { view: false, edit: false },
     chat: { view: true, send: true, moderate: false }
   }

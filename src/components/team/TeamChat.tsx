@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { MessageSquare, Reply, Quote, Send, FileCode, ExternalLink } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { MessageSquare, Reply, Quote, Send, FileCode, ExternalLink, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,7 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { useTeamComments, TeamComment } from "@/hooks/useTeamComments";
 import { useTypingIndicator } from "@/hooks/useTypingIndicator";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useTeamActions, parseChangeShare, TeamAction } from "@/hooks/useTeamActions";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useOrganization } from "@/hooks/useOrganization";
+import { useAuth } from "@/hooks/useAuth";
+import { Permissions, DEFAULT_PERMISSIONS } from "@/hooks/useCustomRoles";
 import TeamFileUpload, { TeamAttachment, AttachmentPreview, AttachmentDisplay } from "./TeamFileUpload";
+import TeamActionButtons from "./TeamActionButtons";
 import TypingIndicator from "./TypingIndicator";
 import { formatDistanceToNow } from "date-fns";
 
@@ -49,16 +55,29 @@ interface TeamChatProps {
 }
 
 const TeamChat = ({ projectId, changeRequestId, title }: TeamChatProps) => {
+  const { user } = useAuth();
+  const { organization } = useOrganization();
+  const { permissions } = usePermissions(organization?.id || null);
+  
   const { comments, loading, addComment } = useTeamComments({ 
     changeRequestId, 
     projectId 
   });
   const { typingUsers, setTyping } = useTypingIndicator(projectId || null);
   const { markAsRead } = useUnreadMessages(projectId || null);
+  const { 
+    getActionForComment, 
+    createApprovalRequest, 
+    approve, 
+    reject, 
+    merge 
+  } = useTeamActions(projectId || null);
+  
   const [newComment, setNewComment] = useState("");
   const [replyingTo, setReplyingTo] = useState<TeamComment | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<TeamAttachment[]>([]);
+  const [processedCommentIds, setProcessedCommentIds] = useState<Set<string>>(new Set());
 
   // Mark as read when viewing comments
   useEffect(() => {
@@ -66,6 +85,38 @@ const TeamChat = ({ projectId, changeRequestId, title }: TeamChatProps) => {
       markAsRead();
     }
   }, [projectId, comments.length, markAsRead]);
+
+  // Auto-detect and create approval requests for shared changes
+  useEffect(() => {
+    comments.forEach(comment => {
+      // Skip if already processed
+      if (processedCommentIds.has(comment.id)) return;
+      
+      // Check if this comment contains a change share
+      const changeData = parseChangeShare(comment.content);
+      if (changeData && (changeData.previewUrl || changeData.files.length > 0)) {
+        // Check if there's already an action for this comment
+        const existingAction = getActionForComment(comment.id);
+        if (!existingAction && comment.user_id === user?.id) {
+          // Create approval request automatically
+          createApprovalRequest(comment.id, changeData);
+          setProcessedCommentIds(prev => new Set(prev).add(comment.id));
+        }
+      }
+    });
+  }, [comments, user?.id, processedCommentIds, getActionForComment, createApprovalRequest]);
+
+  const handleApprove = useCallback(async (actionId: string, comment?: string) => {
+    await approve(actionId, comment);
+  }, [approve]);
+
+  const handleReject = useCallback(async (actionId: string, comment: string) => {
+    await reject(actionId, comment);
+  }, [reject]);
+
+  const handleMerge = useCallback(async (actionId: string) => {
+    await merge(actionId);
+  }, [merge]);
 
   const handleSubmit = async () => {
     if ((!newComment.trim() && pendingAttachments.length === 0) || submitting) return;
@@ -149,6 +200,12 @@ const TeamChat = ({ projectId, changeRequestId, title }: TeamChatProps) => {
                 key={comment.id}
                 comment={comment}
                 onReply={setReplyingTo}
+                action={getActionForComment(comment.id)}
+                permissions={permissions || DEFAULT_PERMISSIONS}
+                currentUserId={user?.id}
+                onApprove={handleApprove}
+                onReject={handleReject}
+                onMerge={handleMerge}
               />
             ))}
           </div>
@@ -217,9 +274,25 @@ interface CommentItemProps {
   comment: TeamComment;
   onReply: (comment: TeamComment) => void;
   isReply?: boolean;
+  action: TeamAction | null;
+  permissions: Permissions;
+  currentUserId: string | undefined;
+  onApprove: (actionId: string, comment?: string) => Promise<void>;
+  onReject: (actionId: string, comment: string) => Promise<void>;
+  onMerge: (actionId: string) => Promise<void>;
 }
 
-const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) => {
+const CommentItem = ({ 
+  comment, 
+  onReply, 
+  isReply = false,
+  action,
+  permissions,
+  currentUserId,
+  onApprove,
+  onReject,
+  onMerge
+}: CommentItemProps) => {
   const initials = comment.profile?.full_name
     ?.split(" ")
     .map((n) => n[0])
@@ -227,7 +300,8 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
     .toUpperCase() || "U";
 
   // Check if this is a change share notification
-  const isChangeShare = comment.content.includes("need review") && comment.content.includes("•");
+  const changeData = parseChangeShare(comment.content);
+  const isChangeShare = changeData && (changeData.previewUrl || changeData.files.length > 0);
 
   return (
     <div className={`flex gap-3 ${isReply ? "ml-8" : ""}`}>
@@ -274,6 +348,44 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
           {renderContentWithLinks(comment.content)}
         </p>
 
+        {/* Change share card with parsed data */}
+        {isChangeShare && changeData && (
+          <div className="mt-2 rounded-lg border border-border bg-muted/30 p-3">
+            {changeData.branchName && (
+              <div className="flex items-center gap-2 mb-2">
+                <GitBranch className="h-4 w-4 text-muted-foreground" />
+                <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                  {changeData.branchName}
+                </code>
+              </div>
+            )}
+            
+            {changeData.previewUrl && (
+              <a
+                href={changeData.previewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary text-sm hover:underline inline-flex items-center gap-1"
+              >
+                <ExternalLink className="h-3 w-3" />
+                View Preview
+              </a>
+            )}
+
+            {/* Action buttons based on permissions */}
+            {action && (
+              <TeamActionButtons
+                action={action}
+                currentUserId={currentUserId}
+                permissions={permissions}
+                onApprove={(c) => onApprove(action.id, c)}
+                onReject={(c) => onReject(action.id, c)}
+                onMerge={() => onMerge(action.id)}
+              />
+            )}
+          </div>
+        )}
+
         {/* Attachments */}
         {comment.attachments && comment.attachments.length > 0 && (
           <div className="mt-2 space-y-2">
@@ -302,6 +414,12 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
                 comment={reply}
                 onReply={onReply}
                 isReply
+                action={null}
+                permissions={permissions}
+                currentUserId={currentUserId}
+                onApprove={onApprove}
+                onReject={onReject}
+                onMerge={onMerge}
               />
             ))}
           </div>
