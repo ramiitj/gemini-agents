@@ -35,6 +35,18 @@ const Dashboard = () => {
     }
   }, [authLoading, user, navigate]);
 
+  // Trigger dashboard tour after org creation - MUST be before early returns
+  useEffect(() => {
+    if (justCreatedOrg && !hasSeenDashboardTour && organization) {
+      // Small delay to ensure modal is closed
+      const timer = setTimeout(() => {
+        startDashboardTour();
+        setJustCreatedOrg(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [justCreatedOrg, hasSeenDashboardTour, organization, startDashboardTour]);
+
   // Show onboarding only after we've confirmed there are no orgs
   const needsOnboarding = hasInitialized && organizations.length === 0;
 
@@ -63,18 +75,6 @@ const Dashboard = () => {
   }
 
   if (!user) return null;
-
-  // Trigger dashboard tour after org creation
-  useEffect(() => {
-    if (justCreatedOrg && !hasSeenDashboardTour && organization) {
-      // Small delay to ensure modal is closed
-      const timer = setTimeout(() => {
-        startDashboardTour();
-        setJustCreatedOrg(false);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [justCreatedOrg, hasSeenDashboardTour, organization, startDashboardTour]);
 
   const handleOrgCreated = async (name: string) => {
     const result = await createOrganization(name);
