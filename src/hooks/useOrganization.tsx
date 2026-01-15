@@ -14,9 +14,11 @@ interface OrganizationContextType {
   organizations: Organization[];
   loading: boolean;
   hasInitialized: boolean;
+  justJoinedViaInvite: boolean;
   setCurrentOrganization: (org: Organization) => void;
   createOrganization: (name: string) => Promise<Organization | null>;
   refetch: () => Promise<Organization[]>;
+  clearJustJoinedFlag: () => void;
 }
 
 const OrganizationContext = createContext<OrganizationContextType | undefined>(undefined);
@@ -27,10 +29,11 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [justJoinedViaInvite, setJustJoinedViaInvite] = useState(false);
 
   // Check and accept any pending invitations for the user
-  const checkPendingInvitations = async () => {
-    if (!user?.email) return;
+  const checkPendingInvitations = async (): Promise<boolean> => {
+    if (!user?.email) return false;
 
     try {
       // Find pending invitations for this email
@@ -41,7 +44,9 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
         .eq("status", "pending")
         .gt("expires_at", new Date().toISOString());
 
-      if (error || !invitations?.length) return;
+      if (error || !invitations?.length) return false;
+
+      let acceptedAny = false;
 
       // Accept each invitation
       for (const invite of invitations) {
@@ -62,6 +67,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
             custom_role_id: invite.custom_role_id,
             custom_permissions: invite.custom_permissions,
           });
+          acceptedAny = true;
         }
 
         // Mark invitation as accepted
@@ -70,9 +76,16 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
           .update({ status: "accepted" })
           .eq("id", invite.id);
       }
+      
+      return acceptedAny;
     } catch (error) {
       console.error("Error processing pending invitations:", error);
+      return false;
     }
+  };
+
+  const clearJustJoinedFlag = () => {
+    setJustJoinedViaInvite(false);
   };
 
   const fetchOrganizations = async (): Promise<Organization[]> => {
@@ -110,13 +123,19 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
         setOrganization(null);
         setLoading(false);
         setHasInitialized(true);
+        setJustJoinedViaInvite(false);
         return;
       }
 
       setLoading(true);
 
       // First, process any pending invitations BEFORE fetching orgs
-      await checkPendingInvitations();
+      const acceptedInvite = await checkPendingInvitations();
+      
+      // Set flag if user just joined via invite
+      if (acceptedInvite) {
+        setJustJoinedViaInvite(true);
+      }
 
       // Then fetch organizations (now includes newly joined ones)
       // CRITICAL: Set hasInitialized AFTER orgs are fetched to prevent flicker
@@ -171,9 +190,11 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
         organizations,
         loading,
         hasInitialized,
+        justJoinedViaInvite,
         setCurrentOrganization,
         createOrganization,
         refetch: fetchOrganizations,
+        clearJustJoinedFlag,
       }}
     >
       {children}

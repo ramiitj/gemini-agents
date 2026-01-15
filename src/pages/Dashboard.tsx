@@ -19,7 +19,15 @@ import { formatDistanceToNow } from "date-fns";
 
 const Dashboard = () => {
   const { user, loading: authLoading } = useAuth();
-  const { organizations, organization, loading: orgLoading, hasInitialized, createOrganization } = useOrganization();
+  const { 
+    organizations, 
+    organization, 
+    loading: orgLoading, 
+    hasInitialized, 
+    createOrganization,
+    justJoinedViaInvite,
+    clearJustJoinedFlag
+  } = useOrganization();
   const { projects, loading: projectsLoading, createProject } = useProjects();
   const navigate = useNavigate();
   const { showDashboardTour, startDashboardTour, completeDashboardTour, hasSeenDashboardTour } = useOnboardingTour();
@@ -46,6 +54,24 @@ const Dashboard = () => {
       return () => clearTimeout(timer);
     }
   }, [justCreatedOrg, hasSeenDashboardTour, organization, startDashboardTour]);
+
+  // Auto-navigate invited users to their project if exactly one exists
+  useEffect(() => {
+    if (justJoinedViaInvite && !projectsLoading && organization && projects.length === 1) {
+      clearJustJoinedFlag();
+      navigate(`/project/${projects[0].id}`);
+    } else if (justJoinedViaInvite && !projectsLoading && organization && projects.length !== 1) {
+      // Clear flag if multiple or no projects - user stays on dashboard
+      clearJustJoinedFlag();
+    }
+  }, [justJoinedViaInvite, projectsLoading, organization, projects, navigate, clearJustJoinedFlag]);
+
+  // Auto-open create project modal after org creation
+  useEffect(() => {
+    if (justCreatedOrg && organization && !projectsLoading && projects.length === 0 && !showDashboardTour) {
+      setCreateProjectOpen(true);
+    }
+  }, [justCreatedOrg, organization, projectsLoading, projects.length, showDashboardTour]);
 
   // Show onboarding only after we've confirmed there are no orgs
   const needsOnboarding = hasInitialized && organizations.length === 0;
