@@ -55,6 +55,15 @@ const Dashboard = () => {
     }
   }, [justCreatedOrg, hasSeenDashboardTour, organization, startDashboardTour]);
 
+  // Auto-redirect to specific invited project
+  useEffect(() => {
+    const invitedProjectId = localStorage.getItem('invited_project_id');
+    if (invitedProjectId && hasInitialized && !projectsLoading) {
+      localStorage.removeItem('invited_project_id');
+      navigate(`/project/${invitedProjectId}`);
+    }
+  }, [hasInitialized, projectsLoading, navigate]);
+
   // Auto-navigate invited users to their project if exactly one exists
   useEffect(() => {
     if (justJoinedViaInvite && !projectsLoading && organization && projects.length === 1) {
@@ -73,8 +82,8 @@ const Dashboard = () => {
     }
   }, [justCreatedOrg, organization, projectsLoading, projects.length, showDashboardTour]);
 
-  // Show onboarding only after we've confirmed there are no orgs
-  const needsOnboarding = hasInitialized && organizations.length === 0;
+  // Show onboarding only after we've confirmed there are no orgs AND not loading AND not just joined via invite
+  const needsOnboarding = hasInitialized && !orgLoading && organizations.length === 0 && !justJoinedViaInvite;
 
   // Wait for both auth and org initialization to complete
   if (authLoading || !hasInitialized) {

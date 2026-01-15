@@ -95,6 +95,51 @@ const AcceptInvite = () => {
         }
       }
 
+      // If invitation has a specific project, add user to project_members
+      if (invitation.project_id) {
+        // Check if already a project member
+        const { data: existingMember } = await supabase
+          .from("project_members")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("project_id", invitation.project_id)
+          .single();
+
+        if (!existingMember) {
+          // Add to project_members
+          const { data: membership } = await supabase
+            .from("project_members")
+            .insert({
+              project_id: invitation.project_id,
+              user_id: user.id,
+              role: invitation.role,
+            })
+            .select()
+            .single();
+
+          // Create user's personal branch
+          try {
+            const { data: branchResult } = await supabase.functions.invoke('create-user-branch', {
+              body: { projectId: invitation.project_id, userId: user.id }
+            });
+
+            // Update project_members with branch name
+            if (branchResult?.branchName && membership) {
+              await supabase
+                .from("project_members")
+                .update({ branch_name: branchResult.branchName })
+                .eq("id", membership.id);
+            }
+          } catch (branchError) {
+            console.error("Error creating user branch:", branchError);
+            // Continue even if branch creation fails
+          }
+        }
+
+        // Store project ID for auto-redirect
+        localStorage.setItem('invited_project_id', invitation.project_id);
+      }
+
       // Update invitation status
       const { error: updateError } = await supabase
         .from("invitations")
@@ -107,7 +152,7 @@ const AcceptInvite = () => {
 
       setStatus("success");
 
-      // Redirect to dashboard after short delay
+      // Redirect to dashboard (which will then redirect to project if needed)
       setTimeout(() => {
         navigate("/dashboard");
       }, 2000);

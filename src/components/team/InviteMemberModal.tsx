@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Mail, Plus, Shield } from "lucide-react";
+import { Mail, Plus, Shield, FolderOpen } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useTeam } from "@/hooks/useTeam";
 import { useCustomRoles, type Permissions } from "@/hooks/useCustomRoles";
+import { useProjects } from "@/hooks/useProjects";
 import CreateRoleModal from "./CreateRoleModal";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -36,11 +37,13 @@ const InviteMemberModal = ({ open, onOpenChange, organizationId }: InviteMemberM
   const [roleMode, setRoleMode] = useState<"preset" | "custom">("preset");
   const [presetRole, setPresetRole] = useState<"admin" | "editor" | "viewer">("editor");
   const [selectedCustomRoleId, setSelectedCustomRoleId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [createRoleOpen, setCreateRoleOpen] = useState(false);
   
   const { inviteMember } = useTeam(organizationId);
   const { roles: customRoles, createRole, refetch: refetchRoles } = useCustomRoles(organizationId);
+  const { projects } = useProjects();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,13 +72,25 @@ const InviteMemberModal = ({ open, onOpenChange, organizationId }: InviteMemberM
     
     const selectedCustomRole = customRoles.find(r => r.id === selectedCustomRoleId);
     
+    const options: {
+      customRoleId?: string;
+      customPermissions?: Json;
+      projectId?: string;
+    } = {};
+
+    if (roleMode === "custom" && selectedCustomRole) {
+      options.customRoleId = selectedCustomRole.id;
+      options.customPermissions = JSON.parse(JSON.stringify(selectedCustomRole.permissions)) as Json;
+    }
+
+    if (selectedProjectId) {
+      options.projectId = selectedProjectId;
+    }
+    
     const result = await inviteMember(
       email, 
-      roleMode === "preset" ? presetRole : "editor", // Default role for custom
-      roleMode === "custom" && selectedCustomRole ? {
-        customRoleId: selectedCustomRole.id,
-        customPermissions: JSON.parse(JSON.stringify(selectedCustomRole.permissions)) as Json
-      } : undefined
+      roleMode === "preset" ? presetRole : "editor",
+      Object.keys(options).length > 0 ? options : undefined
     );
     
     setLoading(false);
@@ -88,6 +103,7 @@ const InviteMemberModal = ({ open, onOpenChange, organizationId }: InviteMemberM
       setEmail("");
       setPresetRole("editor");
       setSelectedCustomRoleId(null);
+      setSelectedProjectId(null);
       setRoleMode("preset");
       onOpenChange(false);
     }
@@ -223,6 +239,45 @@ const InviteMemberModal = ({ open, onOpenChange, organizationId }: InviteMemberM
                 </Button>
               </div>
             )}
+
+            {/* Project Access Selector */}
+            <div className="space-y-2">
+              <Label>Project access (optional)</Label>
+              <Select 
+                value={selectedProjectId || "all"} 
+                onValueChange={(v) => setSelectedProjectId(v === "all" ? null : v)}
+              >
+                <SelectTrigger>
+                  <div className="flex items-center gap-2">
+                    <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                    <SelectValue placeholder="All projects" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <div className="flex flex-col">
+                      <span>All projects in workspace</span>
+                      <span className="text-xs text-muted-foreground">
+                        Access to all current and future projects
+                      </span>
+                    </div>
+                  </SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      <div className="flex flex-col">
+                        <span>{project.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          Access to this project only
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Select a specific project to grant limited access, or leave as "All projects" for full workspace access.
+              </p>
+            </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

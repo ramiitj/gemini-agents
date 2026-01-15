@@ -698,6 +698,7 @@ export type Database = {
           invited_by: string | null
           invitee_name: string | null
           organization_id: string
+          project_id: string | null
           role: string
           status: string
           token: string
@@ -712,6 +713,7 @@ export type Database = {
           invited_by?: string | null
           invitee_name?: string | null
           organization_id: string
+          project_id?: string | null
           role?: string
           status?: string
           token?: string
@@ -726,6 +728,7 @@ export type Database = {
           invited_by?: string | null
           invitee_name?: string | null
           organization_id?: string
+          project_id?: string | null
           role?: string
           status?: string
           token?: string
@@ -750,6 +753,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invitations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -902,6 +912,41 @@ export type Database = {
           username?: string | null
         }
         Relationships: []
+      }
+      project_members: {
+        Row: {
+          branch_name: string | null
+          created_at: string | null
+          id: string
+          project_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          branch_name?: string | null
+          created_at?: string | null
+          id?: string
+          project_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          branch_name?: string | null
+          created_at?: string | null
+          id?: string
+          project_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       projects: {
         Row: {

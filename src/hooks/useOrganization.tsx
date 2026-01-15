@@ -47,6 +47,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
       if (error || !invitations?.length) return false;
 
       let acceptedAny = false;
+      let invitedProjectId: string | null = null;
 
       // Accept each invitation
       for (const invite of invitations) {
@@ -70,11 +71,61 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
           acceptedAny = true;
         }
 
+        // If invitation has a specific project, add user to project_members
+        if (invite.project_id) {
+          // Check if already a project member
+          const { data: existingMember } = await supabase
+            .from("project_members")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("project_id", invite.project_id)
+            .single();
+
+          if (!existingMember) {
+            // Add to project_members
+            const { data: membership } = await supabase
+              .from("project_members")
+              .insert({
+                project_id: invite.project_id,
+                user_id: user.id,
+                role: invite.role,
+              })
+              .select()
+              .single();
+
+            // Create user's personal branch
+            try {
+              const { data: branchResult } = await supabase.functions.invoke('create-user-branch', {
+                body: { projectId: invite.project_id, userId: user.id }
+              });
+
+              // Update project_members with branch name
+              if (branchResult?.branchName && membership) {
+                await supabase
+                  .from("project_members")
+                  .update({ branch_name: branchResult.branchName })
+                  .eq("id", membership.id);
+              }
+            } catch (branchError) {
+              console.error("Error creating user branch:", branchError);
+              // Continue even if branch creation fails
+            }
+          }
+
+          // Store the project ID for auto-redirect
+          invitedProjectId = invite.project_id;
+        }
+
         // Mark invitation as accepted
         await supabase
           .from("invitations")
           .update({ status: "accepted" })
           .eq("id", invite.id);
+      }
+      
+      // Store invited project ID for redirect after initialization
+      if (invitedProjectId) {
+        localStorage.setItem('invited_project_id', invitedProjectId);
       }
       
       return acceptedAny;
