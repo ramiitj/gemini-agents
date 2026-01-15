@@ -76,6 +76,7 @@ export const useTeam = (organizationId: string | null) => {
       customRoleId?: string;
       customPermissions?: Json;
       inviteeName?: string;
+      projectId?: string;
     }
   ) => {
     if (!organizationId || !user) {
@@ -87,9 +88,10 @@ export const useTeam = (organizationId: string | null) => {
       role,
       organization_id: organizationId,
       invited_by: user.id,
-      custom_role_id: options?.customRoleId ?? undefined,
-      custom_permissions: options?.customPermissions ?? undefined,
-      invitee_name: options?.inviteeName ?? undefined
+      custom_role_id: options?.customRoleId,
+      custom_permissions: options?.customPermissions,
+      invitee_name: options?.inviteeName,
+      project_id: options?.projectId,
     };
 
     const { data, error } = await supabase

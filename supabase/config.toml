@@ -35,3 +35,12 @@ verify_jwt = false
 
 [functions.stitch-generate]
 verify_jwt = false
+
+[functions.create-user-branch]
+verify_jwt = false
+
+[functions.team-agent-action]
+verify_jwt = false
+
+[functions.capture-screenshot]
+verify_jwt = false
