@@ -85,8 +85,8 @@ const Dashboard = () => {
   // Show onboarding only after we've confirmed there are no orgs AND not loading AND not just joined via invite
   const needsOnboarding = hasInitialized && !orgLoading && organizations.length === 0 && !justJoinedViaInvite;
 
-  // Wait for both auth and org initialization to complete
-  if (authLoading || !hasInitialized) {
+  // Wait for auth, org initialization, and org loading to complete
+  if (authLoading || !hasInitialized || orgLoading) {
     return (
       <SidebarProvider>
         <div className="flex min-h-screen w-full">
