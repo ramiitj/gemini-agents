@@ -1255,6 +1255,7 @@ export type Database = {
         }[]
       }
       get_user_org_ids: { Args: { _user_id: string }; Returns: string[] }
+      get_user_project_ids: { Args: { _user_id: string }; Returns: string[] }
       has_role: {
         Args: {
           _org_id: string
@@ -1264,6 +1265,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_org_admin_for_project: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_org_member: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
