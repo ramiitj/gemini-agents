@@ -84,7 +84,7 @@ export const useTeam = (organizationId: string | null) => {
     }
 
     const insertPayload = {
-      email,
+      email: email.trim().toLowerCase(), // Normalize email for consistent matching
       role,
       organization_id: organizationId,
       invited_by: user.id,
