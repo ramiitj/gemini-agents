@@ -6,6 +6,8 @@ import { HolocronIcon } from "@/components/brand/HolocronIcon";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { usePasswordCheck } from "@/hooks/usePasswordCheck";
+import { PasswordChecklist } from "@/components/auth/PasswordChecklist";
 import { supabase } from "@/integrations/supabase/client";
 
 const Auth = () => {
@@ -21,6 +23,7 @@ const Auth = () => {
   const [searchParams] = useSearchParams();
   const { signIn, signUp, user } = useAuth();
   const { toast } = useToast();
+  const { isChecking: isCheckingPwned, isPwned: isPwnedPassword } = usePasswordCheck(password);
 
   const redirectPath = searchParams.get('redirect');
 
@@ -92,6 +95,13 @@ const Auth = () => {
     }
     if (message.includes('signup is disabled')) {
       return "Signups are currently disabled. Please contact an administrator.";
+    }
+    // Handle weak/pwned password errors
+    if (message.includes('weak_password') || message.includes('pwned') || message.includes('compromised')) {
+      return "That password is too common or has been found in data breaches. Please choose a more unique password.";
+    }
+    if (message.includes('password')) {
+      return "Password doesn't meet requirements. Please check the criteria below.";
     }
     
     return error.message;
@@ -255,9 +265,11 @@ const Auth = () => {
               minLength={6}
             />
             {isSignUp && (
-              <p className="text-xs text-muted-foreground">
-                Minimum 6 characters
-              </p>
+              <PasswordChecklist 
+                password={password}
+                isCheckingPwned={isCheckingPwned}
+                isPwnedPassword={isPwnedPassword}
+              />
             )}
           </div>
 

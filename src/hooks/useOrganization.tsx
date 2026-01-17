@@ -33,24 +33,38 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
 
   // Check and accept any pending invitations for the user
   const checkPendingInvitations = async (): Promise<boolean> => {
-    if (!user?.email) return false;
+    if (!user?.email) {
+      console.log('[Invite] No user email, skipping invitation check');
+      return false;
+    }
+
+    const normalizedEmail = user.email.toLowerCase().trim();
+    console.log('[Invite] Checking pending invitations for:', normalizedEmail);
 
     try {
-      // Find pending invitations for this email
+      // Find pending invitations for this email (case-insensitive matching handled by RLS)
       const { data: invitations, error } = await supabase
         .from("invitations")
         .select("*")
-        .eq("email", user.email.toLowerCase())
         .eq("status", "pending")
         .gt("expires_at", new Date().toISOString());
 
-      if (error || !invitations?.length) return false;
+      if (error) {
+        console.error('[Invite] Error fetching invitations:', error);
+        return false;
+      }
+
+      console.log('[Invite] Found invitations:', invitations?.length || 0);
+      
+      if (!invitations?.length) return false;
 
       let acceptedAny = false;
       let invitedProjectId: string | null = null;
 
       // Accept each invitation
       for (const invite of invitations) {
+        console.log('[Invite] Processing invite:', invite.id, 'for org:', invite.organization_id, 'project:', invite.project_id);
+        
         // Check if user already has a role in this org
         const { data: existingRole } = await supabase
           .from("user_roles")
@@ -61,14 +75,23 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
 
         if (!existingRole) {
           // Add user to organization with invited role
-          await supabase.from("user_roles").insert({
+          const { error: roleError } = await supabase.from("user_roles").insert({
             user_id: user.id,
             organization_id: invite.organization_id,
             role: invite.role as "owner" | "admin" | "editor" | "viewer",
             custom_role_id: invite.custom_role_id,
             custom_permissions: invite.custom_permissions,
           });
-          acceptedAny = true;
+          
+          if (roleError) {
+            console.error('[Invite] Error inserting user_role:', roleError);
+          } else {
+            console.log('[Invite] User added to organization:', invite.organization_id);
+            acceptedAny = true;
+          }
+        } else {
+          console.log('[Invite] User already has role in org:', invite.organization_id);
+          acceptedAny = true; // Still count as accepted for redirect purposes
         }
 
         // If invitation has a specific project, add user to project_members
@@ -83,7 +106,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
 
           if (!existingMember) {
             // Add to project_members
-            const { data: membership } = await supabase
+            const { data: membership, error: memberError } = await supabase
               .from("project_members")
               .insert({
                 project_id: invite.project_id,
@@ -93,23 +116,34 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
               .select()
               .single();
 
-            // Create user's personal branch
-            try {
-              const { data: branchResult } = await supabase.functions.invoke('create-user-branch', {
-                body: { projectId: invite.project_id, userId: user.id }
-              });
+            if (memberError) {
+              console.error('[Invite] Error inserting project_member:', memberError);
+            } else {
+              console.log('[Invite] User added to project:', invite.project_id);
+              
+              // Create user's personal branch
+              try {
+                console.log('[Invite] Creating user branch for project:', invite.project_id);
+                const { data: branchResult, error: branchError } = await supabase.functions.invoke('create-user-branch', {
+                  body: { projectId: invite.project_id, userId: user.id }
+                });
 
-              // Update project_members with branch name
-              if (branchResult?.branchName && membership) {
-                await supabase
-                  .from("project_members")
-                  .update({ branch_name: branchResult.branchName })
-                  .eq("id", membership.id);
+                if (branchError) {
+                  console.error('[Invite] Branch creation error:', branchError);
+                } else if (branchResult?.branchName && membership) {
+                  console.log('[Invite] Branch created:', branchResult.branchName);
+                  await supabase
+                    .from("project_members")
+                    .update({ branch_name: branchResult.branchName })
+                    .eq("id", membership.id);
+                }
+              } catch (branchError) {
+                console.error("[Invite] Error creating user branch:", branchError);
+                // Continue even if branch creation fails
               }
-            } catch (branchError) {
-              console.error("Error creating user branch:", branchError);
-              // Continue even if branch creation fails
             }
+          } else {
+            console.log('[Invite] User already member of project:', invite.project_id);
           }
 
           // Store the project ID for auto-redirect
@@ -117,20 +151,27 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
         }
 
         // Mark invitation as accepted
-        await supabase
+        const { error: updateError } = await supabase
           .from("invitations")
           .update({ status: "accepted" })
           .eq("id", invite.id);
+          
+        if (updateError) {
+          console.error('[Invite] Error marking invitation as accepted:', updateError);
+        } else {
+          console.log('[Invite] Invitation marked as accepted:', invite.id);
+        }
       }
       
       // Store invited project ID for redirect after initialization
       if (invitedProjectId) {
+        console.log('[Invite] Setting invited_project_id for redirect:', invitedProjectId);
         localStorage.setItem('invited_project_id', invitedProjectId);
       }
       
       return acceptedAny;
     } catch (error) {
-      console.error("Error processing pending invitations:", error);
+      console.error("[Invite] Error processing pending invitations:", error);
       return false;
     }
   };
