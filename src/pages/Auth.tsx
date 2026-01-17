@@ -252,11 +252,11 @@ const Auth = () => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              minLength={1}
+              minLength={6}
             />
             {isSignUp && (
               <p className="text-xs text-muted-foreground">
-                Any password is accepted
+                Minimum 6 characters
               </p>
             )}
           </div>
