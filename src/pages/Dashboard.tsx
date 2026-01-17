@@ -82,11 +82,15 @@ const Dashboard = () => {
     }
   }, [justCreatedOrg, organization, projectsLoading, projects.length, showDashboardTour]);
 
-  // Show onboarding only after we've confirmed there are no orgs AND not loading AND not just joined via invite
-  const needsOnboarding = hasInitialized && !orgLoading && organizations.length === 0 && !justJoinedViaInvite;
+  // CRITICAL: Wait for FULL initialization before showing anything
+  // This prevents flicker where "Create Workspace" briefly appears for existing users
+  const isFullyLoaded = !authLoading && hasInitialized && !orgLoading;
 
-  // Wait for auth, org initialization, and org loading to complete
-  if (authLoading || !hasInitialized || orgLoading) {
+  // Show onboarding only after we've confirmed there are no orgs AND fully loaded AND not just joined via invite
+  const needsOnboarding = isFullyLoaded && organizations.length === 0 && !justJoinedViaInvite;
+
+  // Wait for auth, org initialization, and org loading to complete before rendering main content
+  if (!isFullyLoaded) {
     return (
       <SidebarProvider>
         <div className="flex min-h-screen w-full">

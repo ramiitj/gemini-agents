@@ -168,6 +168,11 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    // CRITICAL: Reset states when user changes to prevent flicker
+    // hasInitialized must stay false until we complete the full fetch
+    setHasInitialized(false);
+    setLoading(true);
+
     const init = async () => {
       if (!user) {
         setOrganizations([]);
@@ -177,8 +182,6 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
         setJustJoinedViaInvite(false);
         return;
       }
-
-      setLoading(true);
 
       // First, process any pending invitations BEFORE fetching orgs
       const acceptedInvite = await checkPendingInvitations();
@@ -190,7 +193,7 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
 
       // Then fetch organizations (now includes newly joined ones)
       // CRITICAL: Set hasInitialized AFTER orgs are fetched to prevent flicker
-      const orgs = await fetchOrganizations();
+      await fetchOrganizations();
       
       // Only mark as initialized after we have the org data
       setLoading(false);
