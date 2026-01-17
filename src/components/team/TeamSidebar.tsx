@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { Users, Plus, ChevronRight, ChevronLeft, MessageSquare } from "lucide-react";
+import { Users, Plus, ChevronRight, ChevronLeft, MessageSquare, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTeam } from "@/hooks/useTeam";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useProjectMembers } from "@/hooks/useProjectMembers";
 import InviteMemberModal from "./InviteMemberModal";
 import MemberCard from "./MemberCard";
 import TeamChat from "./TeamChat";
+import ProjectCollaborators from "./ProjectCollaborators";
 
 interface TeamSidebarProps {
   organizationId: string | null;
@@ -18,6 +19,7 @@ interface TeamSidebarProps {
 
 const TeamSidebar = ({ organizationId, projectId }: TeamSidebarProps) => {
   const { members, loading, currentUserRole } = useTeam(organizationId);
+  const { members: projectMembers } = useProjectMembers(projectId);
   const { unreadCount } = useUnreadMessages(projectId || null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -64,10 +66,10 @@ const TeamSidebar = ({ organizationId, projectId }: TeamSidebarProps) => {
         </div>
 
         <Tabs defaultValue="discussions" className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <TabsList className="mx-3 mt-2 grid grid-cols-2">
+          <TabsList className="mx-3 mt-2 grid grid-cols-3">
             <TabsTrigger value="discussions" className="text-xs gap-1 relative">
               <MessageSquare className="h-3 w-3" />
-              Discussions
+              Chat
               {unreadCount > 0 && (
                 <Badge variant="destructive" className="ml-1 h-4 min-w-4 px-1 text-[10px]">
                   {unreadCount > 99 ? "99+" : unreadCount}
@@ -76,7 +78,16 @@ const TeamSidebar = ({ organizationId, projectId }: TeamSidebarProps) => {
             </TabsTrigger>
             <TabsTrigger value="members" className="text-xs gap-1">
               <Users className="h-3 w-3" />
-              Members
+              Team
+            </TabsTrigger>
+            <TabsTrigger value="collaborators" className="text-xs gap-1 relative">
+              <GitBranch className="h-3 w-3" />
+              Project
+              {projectMembers.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-4 min-w-4 px-1 text-[10px]">
+                  {projectMembers.length}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -124,6 +135,10 @@ const TeamSidebar = ({ organizationId, projectId }: TeamSidebarProps) => {
                 </Button>
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="collaborators" className="flex-1 min-h-0 m-0 overflow-hidden flex flex-col">
+            <ProjectCollaborators projectId={projectId} canManage={canManageTeam} />
           </TabsContent>
         </Tabs>
       </div>
