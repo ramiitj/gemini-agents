@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-
+import { useToast } from "./use-toast";
 interface Organization {
   id: string;
   name: string;
@@ -25,12 +25,12 @@ const OrganizationContext = createContext<OrganizationContextType | undefined>(u
 
 export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [justJoinedViaInvite, setJustJoinedViaInvite] = useState(false);
-
   // Check and accept any pending invitations for the user
   const checkPendingInvitations = async (): Promise<boolean> => {
     if (!user?.email) {
@@ -249,9 +249,18 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const createOrganization = async (name: string): Promise<Organization | null> => {
-    if (!user) return null;
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create a workspace",
+        variant: "destructive",
+      });
+      return null;
+    }
 
     const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    
+    console.log('[Org] Creating organization:', name, 'for user:', user.id);
     
     const { data: org, error: orgError } = await supabase
       .from("organizations")
@@ -260,9 +269,16 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
       .single();
 
     if (orgError) {
-      console.error("Error creating organization:", orgError);
+      console.error("[Org] Error creating organization:", orgError);
+      toast({
+        title: "Error",
+        description: orgError.message || "Failed to create workspace",
+        variant: "destructive",
+      });
       return null;
     }
+
+    console.log('[Org] Organization created:', org.id);
 
     // Add user as owner
     const { error: roleError } = await supabase
@@ -270,7 +286,18 @@ export const OrganizationProvider = ({ children }: { children: ReactNode }) => {
       .insert({ user_id: user.id, organization_id: org.id, role: "owner" });
 
     if (roleError) {
-      console.error("Error assigning role:", roleError);
+      console.error("[Org] Error assigning owner role:", roleError);
+      toast({
+        title: "Warning",
+        description: "Workspace created but role assignment failed. Please try refreshing.",
+        variant: "destructive",
+      });
+    } else {
+      console.log('[Org] Owner role assigned successfully');
+      toast({
+        title: "Success",
+        description: "Workspace created successfully!",
+      });
     }
 
     await fetchOrganizations();
