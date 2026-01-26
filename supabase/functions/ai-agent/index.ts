@@ -3110,20 +3110,39 @@ You help users find information on the web by searching Google and providing com
     const toolCallHistory: string[] = [];
     const MAX_SAME_TOOL_CALLS = 3;
     
-    // Timeout protection - 120 seconds for complex operations
-    // Increased from 45s to support multi-file refactoring tasks
-    const AGENT_TIMEOUT_MS = 120000;
+    // Timeout protection - 50 seconds for Supabase free tier (60s limit)
+    // Allows operations to complete before platform kills connection
+    const AGENT_TIMEOUT_MS = 50000;  // Soft timeout - start wrapping up
+    const HARD_TIMEOUT_MS = 58000;   // Hard timeout - force save and return
     const agentStartTime = Date.now();
-    const TIMEOUT_WARNING_BUFFER_MS = 15000; // Warn when 15s remaining
+    const TIMEOUT_WARNING_BUFFER_MS = 8000; // Warn when 8s remaining
     let timeoutWarningGiven = false;
 
     while (iterations < maxIterations) {
       const elapsedMs = Date.now() - agentStartTime;
-      const remainingMs = AGENT_TIMEOUT_MS - elapsedMs;
       
-      // Check for hard timeout
+      // Check for HARD timeout first - must save and return immediately
+      if (elapsedMs > HARD_TIMEOUT_MS) {
+        console.warn('[Agent] HARD timeout reached after', elapsedMs / 1000, 'seconds - forcing return');
+        
+        // Save session progress for resumption
+        if (supabaseUrl && supabaseKey && projectId && userId) {
+          await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, toolContext, mode);
+          console.log('[Agent] Session saved for resumption');
+        }
+        
+        console.log('[Agent Summary] Iterations:', iterations, ', Tools executed:', executedTools.join(', '));
+        
+        finalResponse += `\n\nOperation reached time limit after ${Math.round(elapsedMs / 1000)} seconds. ` +
+          `Completed ${executedTools.length} operations. ` +
+          `Your progress has been saved. Send "continue" to resume where I left off.`;
+        break;
+      }
+      
+      // Check for soft timeout - finish current op and wrap up
+      const remainingMs = AGENT_TIMEOUT_MS - elapsedMs;
       if (remainingMs <= 0) {
-        console.warn('[Agent] Hard timeout reached after', elapsedMs / 1000, 'seconds');
+        console.warn('[Agent] Soft timeout reached after', elapsedMs / 1000, 'seconds');
         
         // Save session progress for resumption
         if (supabaseUrl && supabaseKey && projectId && userId) {
