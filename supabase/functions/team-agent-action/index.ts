@@ -331,8 +331,9 @@ Deno.serve(async (req) => {
     }
   } catch (error) {
     console.error("Team agent action error:", error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: error.message, success: false }),
+      JSON.stringify({ error: errorMessage, success: false }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
