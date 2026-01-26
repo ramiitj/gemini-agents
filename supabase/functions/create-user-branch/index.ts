@@ -24,7 +24,10 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const githubToken = Deno.env.get('GITHUB_TOKEN');
+    const githubToken = Deno.env.get('GITHUB_PAT');
+    
+    console.log('[create-user-branch] Starting for projectId:', projectId, 'userId:', userId);
+    console.log('[create-user-branch] GitHub token configured:', !!githubToken);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
