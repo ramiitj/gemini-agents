@@ -2606,6 +2606,41 @@ ${visualContext ? `
 ` : ''}`;
 
     let userMessage = message;
+    
+    // Handle "continue" command to resume from timeout
+    const continuePatterns = [
+      /^continue$/i,
+      /^resume$/i,
+      /^keep going$/i,
+      /^go on$/i,
+      /^continue where you left off$/i
+    ];
+    const isContinueCommand = continuePatterns.some(p => p.test(message.trim()));
+    
+    if (isContinueCommand && existingSession) {
+      console.log('[Agent] Continue command detected, restoring session context');
+      // Restore tool context from session
+      if (existingSession.github_owner && existingSession.github_repo) {
+        toolContext.currentRepo = {
+          owner: existingSession.github_owner,
+          repo: existingSession.github_repo,
+          branch: existingSession.current_branch || 'main'
+        };
+      }
+      if (existingSession.staged_files) {
+        toolContext.stagedFiles = existingSession.staged_files as Record<string, { original: string; modified: string }>;
+      }
+      
+      // Prepend context to message so the agent knows to continue
+      userMessage = `[RESUMING PREVIOUS OPERATION]
+You previously timed out while working on a task. Your session context has been restored:
+- Repository: ${existingSession.github_owner}/${existingSession.github_repo}
+- Branch: ${existingSession.current_branch}
+- Staged files: ${Object.keys(existingSession.staged_files || {}).length}
+
+Please continue where you left off and complete the remaining work.`;
+    }
+    
     if (visualContext) {
       userMessage = `[Visual Element Selected]
 Selector: ${visualContext.selector}
@@ -3075,16 +3110,37 @@ You help users find information on the web by searching Google and providing com
     const toolCallHistory: string[] = [];
     const MAX_SAME_TOOL_CALLS = 3;
     
-    // Timeout protection - 45 seconds to leave room for response
-    const AGENT_TIMEOUT_MS = 45000;
+    // Timeout protection - 120 seconds for complex operations
+    // Increased from 45s to support multi-file refactoring tasks
+    const AGENT_TIMEOUT_MS = 120000;
     const agentStartTime = Date.now();
+    const TIMEOUT_WARNING_BUFFER_MS = 15000; // Warn when 15s remaining
+    let timeoutWarningGiven = false;
 
     while (iterations < maxIterations) {
-      // Timeout check
-      if (Date.now() - agentStartTime > AGENT_TIMEOUT_MS) {
-        console.warn('[Agent] Timeout reached after', (Date.now() - agentStartTime) / 1000, 'seconds');
-        finalResponse += '\n\nNote: Operation timed out. Partial results shown above.';
+      const elapsedMs = Date.now() - agentStartTime;
+      const remainingMs = AGENT_TIMEOUT_MS - elapsedMs;
+      
+      // Check for hard timeout
+      if (remainingMs <= 0) {
+        console.warn('[Agent] Hard timeout reached after', elapsedMs / 1000, 'seconds');
+        
+        // Save session progress for resumption
+        if (supabaseUrl && supabaseKey && projectId && userId) {
+          await saveAgentSession(supabaseUrl, supabaseKey, projectId, userId, toolContext, mode);
+          console.log('[Agent] Session saved for resumption');
+        }
+        
+        finalResponse += `\n\nOperation reached time limit after ${Math.round(elapsedMs / 1000)} seconds. ` +
+          `Completed ${executedTools.length} operations. ` +
+          `Your progress has been saved. Send "continue" to resume where I left off.`;
         break;
+      }
+      
+      // Warn user when approaching timeout (once)
+      if (!timeoutWarningGiven && remainingMs < TIMEOUT_WARNING_BUFFER_MS) {
+        console.warn('[Agent] Approaching timeout, wrapping up. Remaining:', remainingMs / 1000, 'seconds');
+        timeoutWarningGiven = true;
       }
       
       iterations++;
